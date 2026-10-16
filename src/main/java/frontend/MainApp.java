@@ -1,4 +1,4 @@
-package com.team26.sentencebuilder.frontend;
+package frontend;
 
 import javafx.application.Application;
 import javafx.scene.Scene;
@@ -14,7 +14,7 @@ public class MainApp extends Application {
         Label initLabel = new Label("Team 26 Sentence Builder - GUI Ready");
         StackPane root = new StackPane();
         root.getChildren().add(initLabel);
-
+        //for now using a stack pane will be iterated over, but this sets up and renders the stage
         Scene scene = new Scene(root, 800, 600);
         primaryStage.setTitle("Sentence Builder");
         primaryStage.setScene(scene);
