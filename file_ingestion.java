@@ -3,6 +3,7 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Locale;
 
 public class file_ingestion{
 
@@ -24,7 +25,20 @@ public class file_ingestion{
     //make use of a BufferReader and make sure you only take the words themselves
     // so probably make a regex that leaves out numbers and punctuations
     public void readFile(Path file) throws IOException {
+        //try-wtih-resource so the file closes even when an exception is thrown
+        try(BufferedReader input = Files.newBufferedReader(file)){
+            passStart(input);
+            String line = input.readLine();
+            while(input != null){
+                if(line.startsWith("*** END OF"))
+                    break;
 
+                for(String word : line.toLowerCase().split("\\W+")){
+                    if(!word.isEmpty())
+                        System.out.println();
+                }
+            }
+        }
     }
 
     //a method or some way to track the progress of the file completion
