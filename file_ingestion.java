@@ -27,6 +27,33 @@ public class file_ingestion{
     //my inital idea was to  gather all the words and batch send them but I do not yet know the best way to do that
 
     public static void main(String[] args){
+        GutenbergIngestor ing = new GutenbergIngestor();
+        boolean success = ing.openFile("Gutenberg\\testcorpus.txt");
+        if(!success) {
+            System.out.println("File not found");
+            return;
+        }
+
+        success = ing.extractMetadata();
+        if(!success) {
+            System.out.println("Metadata extraction failed");
+            return;
+        }
+
+        DocumentMetadata metadata = ing.getMetadata();
+        System.out.println(metadata.getTitle());
+        System.out.println(metadata.getAuthor());
+        System.out.println(metadata.getDate());
+        System.out.println(metadata.getBookNumber());
+        System.out.println(metadata.getSizeBytes());
+
+
+        ing.grabSentence();
+        ing.grabSentence();
+        ing.grabSentence();
+        ing.grabSentence();
+        ing.grabSentence();
+
         System.out.println("Hello World");
     }
 }
