@@ -149,12 +149,12 @@ public class DatabaseManager implements AutoCloseable {
 
     //removes a passed wordID, nextWordID pair
     public boolean removeTransition(int wordID, int nextWordID) throws SQLException{
-        return (execute("DELETE FROM transitions WHERE word_id = ? AND nextWordID", wordID, nextWordID)) > 0;
+        return (execute("DELETE FROM transitions WHERE word_id = ? AND next_word_id = ?", wordID, nextWordID)) > 0;
     }
 
     //remove a file from the imported file table
-    public  boolean removeImportedFile(int wordId) throws SQLException{
-        return (execute("DELETE FROM imported_files WHERE file_id = ?", wordId)) > 0;
+    public  boolean removeImportedFile(int fileID) throws SQLException{
+        return (execute("DELETE FROM imported_files WHERE file_id = ?", fileID)) > 0;
     }
 
     //Setup for an Automic operation that will only commit if the action successfully completes and roll back if any exception is thrown
@@ -165,7 +165,7 @@ public class DatabaseManager implements AutoCloseable {
     }
 
     //An all or nothing commit
-    private void inTranaction(SqlAction action) throws SQLException{
+    private void inTransaction(SqlAction action) throws SQLException{
         //save the previous option of auto commits and close it for the upcoming actions
         boolean oldAutoCommit = conn.getAutoCommit();
         conn.setAutoCommit(false);
@@ -188,9 +188,9 @@ public class DatabaseManager implements AutoCloseable {
         //making use of a lambda function to override and implement SqlAction.run
         //use removed to extract the boolean value for if something was removed as lambda cannot assign local variables
         boolean[] removed = new boolean[1];
-        //handoff to inTranaction and implement run as lambda
-        inTranaction(() -> {
-            execute("DELETE FROM transactions WHERE word_id = ? OR next_word_id = ?", wordId, wordId);
+        //handoff to inTransaction and implement run as lambda
+        inTransaction(() -> {
+            execute("DELETE FROM transitions WHERE word_id = ? OR next_word_id = ?", wordId, wordId);
             removed[0] = (execute("DELETE FROM words WHERE word_id = ?", wordId)) > 0;
         });
         return removed[0];
