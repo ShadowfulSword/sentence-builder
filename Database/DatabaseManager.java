@@ -39,6 +39,18 @@ public class DatabaseManager implements AutoCloseable {
         System.out.println("Successfully closed connection to DB");
     }
 
+    //execute helper method. takes in a query and any number of Object type parameters
+    //gets passed query as the prepared statement and loops through any number of passed parameters to attach values to the statements
+    private void execute(String query, Object... params) throws SQLException {
+
+        try(PreparedStatement ps = conn.prepareStatement(query)){
+            for(int i = 0; i < params.length; i++)
+                ps.setObject(i+1, params[i]);
+            ps.executeUpdate();
+        }
+
+    }
+
     //use an insert into words table for new words and on the word already existing, update the frequencies as old frequencies + new frequencies
     public void add_word(String  word, int total_frequency, int start_frequency, int end_frequency) throws SQLException{
         execute(WORD_UPSERT, word, total_frequency, start_frequency, end_frequency);
@@ -60,15 +72,7 @@ public class DatabaseManager implements AutoCloseable {
         }
     }
 
-    //execute helper method. takes in a query and any number of Object type parameters
-    //gets passed query as the prepared statement and loops through any number of passed parameters to attach values to the statements
-    private void execute(String query, Object... params) throws SQLException {
 
-        try(PreparedStatement ps = conn.prepareStatement(query)){
-            for(int i = 0; i < params.length; i++)
-                ps.setObject(i+1, params[i]);
-            ps.executeUpdate();
-        }
 
-    }
+
 }
