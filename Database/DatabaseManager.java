@@ -41,12 +41,13 @@ public class DatabaseManager implements AutoCloseable {
 
     //execute helper method. takes in a query and any number of Object type parameters
     //gets passed query as the prepared statement and loops through any number of passed parameters to attach values to the statements
-    private void execute(String query, Object... params) throws SQLException {
+    //returns the number of rows affected by the passed query or throws an exception
+    private int execute(String query, Object... params) throws SQLException {
 
         try(PreparedStatement ps = conn.prepareStatement(query)){
             for(int i = 0; i < params.length; i++)
                 ps.setObject(i+1, params[i]);
-            ps.executeUpdate();
+            return ps.executeUpdate();
         }
 
     }
@@ -72,6 +73,26 @@ public class DatabaseManager implements AutoCloseable {
         }
     }
 
+    //update a single wordID word to be a different word
+    //returns true on successful changes false otherwise
+    public boolean updateWordText(int wordId, String newWord) throws SQLException{
+        return (execute("UPDATE words SET word = ?, start_frequency = ?", newWord, wordId)) > 0;
+    }
+
+    //update the frequency counts of a specific word
+    //returns true if successful
+    public boolean updateWordFrequencies(int word_id, int total_frequency, int start_frequency, int end_frequency) throws SQLException{
+        String sql_query = "UPDATE words SET total_frequency = ?, start_frequency = ?, end_frequency = ? "
+                + "WHERE word_id = ?";
+        return (execute( sql_query,total_frequency, start_frequency, end_frequency, word_id)) > 0;
+    }
+
+    //update the frequency of a specific word, nextword pair
+    //return true if successful
+    public boolean updateTransitionFrequency(int word_id, int next_word_id, int frequency) throws SQLException{
+        return (execute("UPDATE transition SET frequency = ? WHERE word_id = ? AND next_word_id = ?", frequency, word_id, next_word_id)) > 0;
+
+    }
 
 
 
