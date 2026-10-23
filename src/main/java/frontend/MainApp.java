@@ -1,3 +1,4 @@
+// Oudom Pach OTP220001 10/20/2026
 package frontend;
 
 import frontend.state.AppState;
@@ -18,9 +19,21 @@ import java.nio.file.Files;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 
+/*
+    MainApp Class:
+    Serves as the root JavaFX application container. It instantiates the shared AppState,
+    constructs the primary BorderPane layout shell, mounts the top header (with asynchronous file ingestion),
+    embeds the three core views inside a TabPane, and binds the bottom status bar.
+ */
 public class MainApp extends Application {
+    // Instantiate the central shared state container for the entire application UI
     private final AppState state = new AppState();
 
+    /*
+        start Method:
+        Configures and displays the primary application stage, sets up the BorderPane root container,
+        initializes the TabPane with its three modular views, binds the footer status bar, and loads theme.css.
+     */
     @Override
     public void start(Stage stage) {
         BorderPane root = new BorderPane();
@@ -54,6 +67,12 @@ public class MainApp extends Application {
         stage.show();
     }
 
+    /*
+        buildHeader Method:
+        Constructs the top navigation and status header. It includes branding, connection indicators,
+        the live file ingestion progress bar and status tracker, and an asynchronous file chooser button
+        to load external Project Gutenberg .txt corpora without blocking the UI thread.
+     */
     private Node buildHeader(Stage stage) {
         Label title = UIFactory.label("Sentence Builder", "brand");
         VBox brand = new VBox(5, title, UIFactory.label("A little probability. Endless possibilities.", "muted"));
@@ -107,6 +126,7 @@ public class MainApp extends Application {
         return row;
     }
 
+    // Standard Java main entry point that launches the JavaFX application runtime
     public static void main(String[] args) {
         launch(args);
     }

@@ -12,6 +12,10 @@ import javafx.scene.input.KeyCode;
 import javafx.scene.layout.*;
 import java.util.*;
 
+
+/* Tab 1:
+    Makes the text editor and interactive sentence generator on the left and right hand side encapsulating it.
+ */
 public class EditorView {
     private final AppState state;
     private final TextArea editor = new TextArea("It is a truth universally acknowledged that a single man ");
@@ -26,14 +30,17 @@ public class EditorView {
         editor.getStyleClass().add("composition");
         editor.setPrefHeight(340);
 
+        //The editor.text listener property watch every character type into text area and predicts onlys when delimiter or space is typed.
         ContextMenu suggestions = new ContextMenu();
         editor.textProperty().addListener((o, old, value) -> {
             suggestions.hide();
-            if (value.endsWith(" ") && editor.isFocused()) {
+            if (value.endsWith(" ") && editor.isFocused()) {  // if space and editor is focused will open up a context menu of predicted words for user to pick from
                 suggestions.getItems().clear();
+
+                // sample choices so far will be changed
                 String[] choices = {"in", "must", "who", "of"};
                 String[] probabilities = {"42%", "21%", "14%", "9%"};
-                for (int i = 0; i < choices.length; i++) {
+                for (int i = 0; i < choices.length; i++) {  //this just creates the menu
                     String choice = choices[i];
                     MenuItem item = new MenuItem((i + 1) + ".  " + choice + "                  " + probabilities[i]);
                     item.setOnAction(e -> editor.insertText(editor.getCaretPosition(), choice + " "));
@@ -43,6 +50,7 @@ public class EditorView {
             }
         });
 
+        //this listens for when user types tab when the menu is open and it just adds the top predicted word in the context menu else escape exits it
         editor.setOnKeyPressed(e -> {
             if (e.getCode() == KeyCode.TAB && suggestions.isShowing()) {
                 e.consume();
@@ -53,6 +61,8 @@ public class EditorView {
             }
         });
 
+
+        //live word/character count and splits text by whitespace
         Label counter = UIFactory.label("11 words", "muted");
         editor.textProperty().addListener((o, a, b) ->
                 counter.setText((b.isBlank() ? 0 : b.trim().split("\\s+").length) + " words · " + b.length() + " characters"));
@@ -65,6 +75,7 @@ public class EditorView {
                 UIFactory.button("Clear text", "", editor::clear));
         VBox.setVgrow(editor, Priority.ALWAYS);
 
+        //uses a textfield for starting word and a random word button that pulls random entry in get words
         TextField starting = new TextField("It");
         starting.setPromptText("Starting word");
         Button randomWord = UIFactory.button("Random Word", "", () -> {
@@ -72,6 +83,9 @@ public class EditorView {
                 starting.setText(state.getWords().get(random.nextInt(state.getWords().size())).text());
             }
         });
+
+        //builds right side of tab 1
+
         HBox startRow = new HBox(10, starting, randomWord);
         HBox.setHgrow(starting, Priority.ALWAYS);
 
@@ -91,6 +105,9 @@ public class EditorView {
         List<CheckBox> selections = new ArrayList<>();
         List<String> generated = new ArrayList<>(Arrays.asList(AppState.SAMPLES));
 
+
+        //builds the sentence card hbox rows in the scroll pane so for each generated sentence, pairing a selection with a checkbox with add to text, appends to editor
+        //this is on the right side of tab 1
         Runnable render = () -> {
             batch.getChildren().clear();
             selections.clear();
@@ -110,6 +127,7 @@ public class EditorView {
         };
         render.run();
 
+        // Logic for if generate sentence is chceked then the sentence is fed back into injestor. For self injestion
         Button generate = UIFactory.button("Generate Sentences", "primary", () -> {
             generated.clear();
             for (int i = 0; i < count.getValue(); i++) {
@@ -127,6 +145,7 @@ public class EditorView {
         list.setPrefHeight(240);
         VBox.setVgrow(list, Priority.ALWAYS);
 
+        //builds more of the UI here on the page
         HBox actions = new HBox(8,
                 UIFactory.button("Add Selected to Body of Text", "", () -> {
                     for (int i = 0; i < generated.size(); i++) {

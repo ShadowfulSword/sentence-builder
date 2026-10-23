@@ -10,6 +10,14 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.function.Function;
 
+
+/*
+
+Factory Method pattern:
+    what this class does is it gets rid of repetitive Java FX boilerplate code
+    we can just call these static styling so a view can get the styling without having to write more styling code
+
+ */
 public final class UIFactory {
     private UIFactory() {}
 
