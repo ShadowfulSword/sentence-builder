@@ -24,4 +24,6 @@ hs_err_pid*
 replay_pid*
 #ignore the .idea folder from idea IDE
 .idea/
+#ignore the output file for the idea execution and build
+out/
 lib/
