@@ -26,3 +26,4 @@ replay_pid*
 .idea/
 #ignore the output file for the idea execution and build
 out/
+lib/
