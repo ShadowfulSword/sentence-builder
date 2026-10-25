@@ -8,7 +8,7 @@ public class CorpusRepository{
 
     public static void main(String[] args){
         GutenbergIngestor ing = new GutenbergIngestor();
-        boolean success = ing.openFile("Gutenberg\\testcorpus.txt");
+        boolean success = ing.openFile("Gutenberg/testcorpus.txt");
         if(!success) {
             System.out.println("File not found");
             return;
