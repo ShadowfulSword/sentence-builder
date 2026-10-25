@@ -13,26 +13,30 @@
 
 package Database;
 import java.sql.*;
-import java.util.OptionalInt;
+import java.util.Map;
+
 
 //The class has AutoCloseable so we can open it from any script and call connection.close() to close it
 //or open connections with a try-with-resources to AutoClose
 public class DatabaseManager implements AutoCloseable {
 
-    //the connection object associated with all the functions. should not be mutable
+    //the cion object associated with all the functions. should not be mutable
     private final Connection conn;
+
+    //the batch size of how many words will accumilate before a DB transaction will be made
+    private static final int BATCH_SIZE = 5000;
 
     //upsert statement for transition and word that either inserts new word or updates on existing word
     private static final String WORD_UPSERT = "INSERT INTO words (word, total_frequency, start_frequency, end_frequency) "
             + "VALUES (?, ?, ?, ?) AS new_data "
             + "ON DUPLICATE KEY UPDATE "
-            + "total_frequency = total_frequency + new_data.total_frequency, "
-            + "start_frequency = start_frequency + new_data.start_frequency, "
-            + "end_frequency = end_frequency + new_data.end_frequency";
-    private static final String TRANSITION_UPSERT = "INSERT INTO transitions (word_id, next_word_id, frequency) "
+            + "total_frequency = words.total_frequency + new_data.total_frequency, "
+            + "start_frequency = words.start_frequency + new_data.start_frequency, "
+            + "end_frequency = words.end_frequency + new_data.end_frequency";
+    private static final String TRANSITION_UPSERT = "INSERT INTO transitions (word, next_word, frequency) "
             + "VALUES (?, ?, ?) AS new_data "
             + "ON DUPLICATE KEY UPDATE "
-            + "frequency = frequency + new_data.frequency";
+            + "frequency = transitions.frequency + new_data.frequency";
 
     //connection constructor takes in your url(see below). username and password of your DB connection
     //url takes the form of: "jdbc:mysql://hostname:port/database_name"
@@ -62,22 +66,17 @@ public class DatabaseManager implements AutoCloseable {
 
     }
 
-    //use an insert into words table for new words and on the word already existing, update the frequencies as old frequencies + new frequencies
-    public int addWord(String word, int totalFrequency, int startFrequency, int endFrequency) throws SQLException{
+    //take in one word and increment the total_frequency by 1
+    //take in start and end as booleans to tick each of them up by one
+    public void addWord(String word, boolean isStart, boolean isEnd) throws SQLException{
         //upsert the word
-        execute(WORD_UPSERT, word, totalFrequency, startFrequency, endFrequency);
-
-        //check the ID and return the ID or throw an exception if the ID is missing
-        OptionalInt id = getWordID(word);
-        if(id.isPresent())
-            return  id.getAsInt();
-        else
-            throw new SQLException("Word missing right after insert: "  + word);
+        execute(WORD_UPSERT, word, 1, isStart ? 1 : 0, isEnd ? 1 : 0);
     }
 
     //use insert into transitions table for new word chains and on already existing word update the total frequency
-    public void addTransition(int wordId, int nextWordId, int totalOccurrence) throws SQLException {
-        execute(TRANSITION_UPSERT, wordId, nextWordId, totalOccurrence);
+    //records 1 occurance
+    public void addTransition(String word, String nextWord) throws SQLException {
+        execute(TRANSITION_UPSERT, word, nextWord, 1);
     }
 
     //simply add the new file after checking that it is not in the database already
@@ -96,30 +95,28 @@ public class DatabaseManager implements AutoCloseable {
         return  true;
     }
 
-    //update a single wordID word to be a different word
+
+    //update a single word to be a different word
     //throws an exception if the new text is already belongs to a different word since each word must be unique in the DB
     //returns true on successful changes false otherwise
-    public boolean updateWordText(int wordId, String newWord) throws SQLException{
-        OptionalInt existing = getWordID(newWord);
-
-        //another wordid exists with this text
-        if(existing.isPresent() && existing.getAsInt() != wordId)
-            throw new SQLException("Cannot rename word" + wordId + ": \"" + newWord + "\" already belongs to word " + existing.getAsInt());
-        return (execute("UPDATE words SET word = ? WHERE word_id = ?", newWord, wordId)) > 0;
+    public boolean updateWordText(String oldWord, String newWord) throws SQLException{
+        if(!oldWord.equals(newWord) && hasWord(newWord))
+            throw new SQLException("Cannot rename word " + oldWord + ": \"" + newWord + "\" already exists");
+        return (execute("UPDATE words SET word = ? WHERE word = ?", newWord, oldWord)) > 0;
     }
 
     //update the frequency counts of a specific word
     //returns true if successful
-    public boolean updateWordFrequencies(int wordID, int totalFrequency, int startFrequency, int endFrequency) throws SQLException{
+    public boolean updateWordFrequencies(String word, int totalFrequency, int startFrequency, int endFrequency) throws SQLException{
         String sql_query = "UPDATE words SET total_frequency = ?, start_frequency = ?, end_frequency = ? "
-                + "WHERE word_id = ?";
-        return (execute( sql_query,totalFrequency, startFrequency, endFrequency, wordID)) > 0;
+                + "WHERE word = ?";
+        return (execute( sql_query,totalFrequency, startFrequency, endFrequency, word)) > 0;
     }
 
     //update the frequency of a specific word, nextword pair
     //return true if successful
-    public boolean updateTransitionFrequency(int wordId, int nextWordId, int frequency) throws SQLException{
-        return (execute("UPDATE transitions SET frequency = ? WHERE word_id = ? AND next_word_id = ?", frequency, wordId, nextWordId)) > 0;
+    public boolean updateTransitionFrequency(String word, String nextWord, int frequency) throws SQLException{
+        return (execute("UPDATE transitions SET frequency = ? WHERE word = ? AND next_word = ?", frequency, word, nextWord)) > 0;
 
     }
 
@@ -133,23 +130,19 @@ public class DatabaseManager implements AutoCloseable {
         }
     }
 
-    //run a query to get the id of a passed word
-    //used here to check if adding was successful
-    public OptionalInt getWordID(String word) throws SQLException{
-        try(PreparedStatement ps = conn.prepareStatement("SELECT word_id FROM words WHERE word = ?")){
+    //run a query to check if a passed word exists in the word table
+    public boolean hasWord(String word) throws SQLException{
+        try(PreparedStatement ps = conn.prepareStatement("SELECT 1 FROM words where word = ?")){
             ps.setString(1, word);
             try(ResultSet rs = ps.executeQuery()){
-                if(!rs.next())
-                    return OptionalInt.empty();
-                else
-                    return OptionalInt.of(rs.getInt(1));
+                return rs.next();
             }
         }
     }
 
-    //removes a passed wordID, nextWordID pair
-    public boolean removeTransition(int wordID, int nextWordID) throws SQLException{
-        return (execute("DELETE FROM transitions WHERE word_id = ? AND next_word_id = ?", wordID, nextWordID)) > 0;
+    //removes a passed word, nextWordpair
+    public boolean removeTransition(String word, String nextWord) throws SQLException{
+        return (execute("DELETE FROM transitions WHERE word = ? AND next_word = ?", word, nextWord)) > 0;
     }
 
     //remove a file from the imported file table
@@ -157,7 +150,7 @@ public class DatabaseManager implements AutoCloseable {
         return (execute("DELETE FROM imported_files WHERE file_id = ?", fileID)) > 0;
     }
 
-    //Setup for an Automic operation that will only commit if the action successfully completes and roll back if any exception is thrown
+    //Setup for an Atomic operation that will only commit if the action successfully completes and roll back if any exception is thrown
     //this will later be called by the batch adding and remove words
     //interface for a given SQL Action
     private  interface SqlAction{
@@ -184,16 +177,76 @@ public class DatabaseManager implements AutoCloseable {
     }
 
     //Remove a word from the word table and the word and every transition in the transitions table
-    public boolean removeWord(int wordId) throws SQLException{
+    public boolean removeWord(String word) throws SQLException{
         //making use of a lambda function to override and implement SqlAction.run
         //use removed to extract the boolean value for if something was removed as lambda cannot assign local variables
         boolean[] removed = new boolean[1];
         //handoff to inTransaction and implement run as lambda
         inTransaction(() -> {
-            execute("DELETE FROM transitions WHERE word_id = ? OR next_word_id = ?", wordId, wordId);
-            removed[0] = (execute("DELETE FROM words WHERE word_id = ?", wordId)) > 0;
+            execute("DELETE FROM transitions WHERE word = ? OR next_word = ?", word, word);
+            removed[0] = (execute("DELETE FROM words WHERE word = ?", word)) > 0;
         });
         return removed[0];
     }
 
+
+    //to batch update the words we need the all or nothing commit + words list + transitions
+    //Map<String, long[]> words and Map<String, Map<String, int>> transitions
+    //the long array for words holds total, start and end frequencies and transition is a map of maps of word x->word y
+    public void addBatch(Map<String, long[]> words, Map<String, Map<String, Integer>> transitions) throws SQLException{
+
+        //use the lambda function in the same way its used in removeWord to overload the SqlAction's run
+        inTransaction(() -> {
+            batchUpsertWords(words);
+            batchUpsertTransition(transitions);
+        });
+    }
+//pass a class for the data over a map or a list of classes for the batching
+
+    //take the pased words and set them as the upsert statement's value
+    //batch the queries as we go and on reaching our batch size, push them to the DB
+    private void batchUpsertWords(Map<String, long[]> words) throws SQLException{
+        try(PreparedStatement ps = conn.prepareStatement(WORD_UPSERT)){
+            int n = 0;
+            //get each pair as one Map.Entry and load word, total, start, and end frequency in the prep statement and add it to batch later
+            for(Map.Entry<String, long[]> e: words.entrySet()){
+                ps.setString(1, e.getKey());
+                ps.setLong(2, e.getValue()[0]);
+                ps.setLong(3, e.getValue()[1]);
+                ps.setLong(4, e.getValue()[2]);
+
+                ps.addBatch();
+                //once we reach our specified batch size, execute the query
+                if(++n % BATCH_SIZE == 0)
+                    ps.executeBatch();
+            }
+            //account for any leftover words in the remaining batch
+            ps.executeBatch();
+        }
+
+    }
+
+    //take in teh map of maps of from word and the map of their to words
+    //batch the queries as we go and on reaching our batch size push them to the DB
+    private void batchUpsertTransition(Map<String, Map<String, Integer>> transitions) throws SQLException{
+        try(PreparedStatement ps = conn.prepareStatement(TRANSITION_UPSERT)){
+            int n = 0;
+            //for each from word transition get the starting word(key) and the map(chain) of the following words
+            for(Map.Entry<String, Map<String, Integer>> fromWord : transitions.entrySet()){
+                for(Map.Entry<String, Integer> toWord : fromWord.getValue().entrySet()){
+                    ps.setString(1, fromWord.getKey());
+                    ps.setString(2, toWord.getKey());
+                    ps.setInt(3, toWord.getValue());
+
+                    ps.addBatch();
+                    //once we reach our batch size, execute the query
+                    if(++n % BATCH_SIZE == 0)
+                        ps.executeBatch();
+
+                }
+            }
+            //account for any leftober words in the remaining batch
+            ps.executeBatch();
+        }
+    }
 }
