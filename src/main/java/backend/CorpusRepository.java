@@ -1,9 +1,4 @@
-import java.io.BufferedReader; //use buffer reader to read the file because it negates some of the IO calls that FileReader makes
-import java.io.FileReader;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-
+package backend;
 public class CorpusRepository{
 
     public static void main(String[] args){

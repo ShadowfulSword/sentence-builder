@@ -6,7 +6,7 @@ import javafx.beans.property.StringProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import java.util.*;
-
+import backend.Token;
 
 /*
 Observer Method Pattern:
@@ -146,5 +146,47 @@ public class AppState {
         // Join the chosen words with spaces, capitalize the first letter, and add a period at the end
         String sentence = String.join(" ", result);
         return Character.toUpperCase(sentence.charAt(0)) + sentence.substring(1) + ".";
+    }
+
+    // In AppState.java:
+    public void ingestCorpusStream(Iterator<Token> tokenizer) {
+        Map<String, int[]> counts = new TreeMap<>();
+        // Preserve existing counts from previous imports
+        for (WordItem w : words) {
+            counts.put(w.text(), new int[]{w.total(), w.starts(), w.ends()});
+        }
+
+        String previousWord = null;
+        int wordCount = 0;
+
+        while (tokenizer.hasNext()) {
+            Token token = tokenizer.next();
+            String word = token.getWord().toLowerCase();
+            if (word.isEmpty()) continue;
+
+            wordCount++;
+            int[] c = counts.computeIfAbsent(word, k -> new int[3]);
+            c[0]++; // Total frequency
+
+            if (token.isStart()) {
+                c[1]++; // Sentence start count
+                previousWord = null; // Reset previous word at sentence boundary
+            }
+            if (token.isEnd()) {
+                c[2]++; // Sentence end count
+            }
+
+            // Build bi-gram transitions
+            if (previousWord != null) {
+                transitions.computeIfAbsent(previousWord, k -> new HashMap<>())
+                        .merge(word, 1, Integer::sum);
+            }
+            previousWord = word;
+        }
+
+        // Refresh the observable words list for Tab 2 and Tab 3
+        List<WordItem> updated = new ArrayList<>();
+        counts.forEach((w, c) -> updated.add(new WordItem(w, c[0], c[1], c[2], transitions.getOrDefault(w, Map.of()).size())));
+        words.setAll(updated);
     }
 }
