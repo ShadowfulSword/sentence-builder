@@ -12,8 +12,9 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class CorpusRepository {
-    private static final String DB_URL = "jdbc:mysql://localhost:3306/sentence_builder?rewriteBatchedStatements=true";
+    private static final String DB_URL = "jdbc:mysql://localhost:3306/sentence_builder?rewriteBatchedStatements=true"; //past the ? allows the DB to rewrite the batch calls together rather than as individual transactions when pased through
     public static void main(String[] args) {
+        long metaStart = System.nanoTime();
         GutenbergIngestor ing = new GutenbergIngestor();
 
         String filename = "documents/project_gutenberg/great-gatsby.txt"; //store filename ahead of time so it can be passed via frontend later
@@ -28,7 +29,7 @@ public class CorpusRepository {
             System.out.println("Metadata extraction failed");
             return;
         }
-
+        System.out.println("Metadata took " + (System.nanoTime() - metaStart)/1_000_000 + "ms to exec");
 
         DocumentMetadata metadata = ing.getMetadata();
         System.out.println(metadata.getTitle());
@@ -41,6 +42,7 @@ public class CorpusRepository {
         Map<String, WordData> words = new HashMap<>();
         Map<String, TransitionData> transitions = new HashMap<>();
 
+        long dbStart = System.nanoTime();
         try (DatabaseManager db = new DatabaseManager(DB_URL, "root", "password")) { //replace with your password
             //don't import the file if it is already in the DB
             if (db.hasImportedFile(metadata.getTitle())) {
@@ -90,6 +92,8 @@ public class CorpusRepository {
             System.out.println("total words: " + totalWords);
         } catch (SQLException e) {
             System.out.println("Can't connect to DB error: " + e.getMessage());
+        } finally {
+            System.out.println("DB took " + (System.nanoTime() - dbStart) / 1_000_000 + "ms to exec");
         }
     }
 }
