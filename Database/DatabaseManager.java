@@ -14,7 +14,6 @@
 package Database;
 import java.sql.*;
 import java.util.Collection;
-import java.util.Map;
 
 
 //The class has AutoCloseable so we can open it from any script and call connection.close() to close it
@@ -203,14 +202,13 @@ public class DatabaseManager implements AutoCloseable {
         });
     }
 
-    //pass a class for the data over a map or a list of classes for the batching
 
-    //take the pased words and set them as the upsert statement's value
+    //take the pased collection of WordData objects
     //batch the queries as we go and on reaching our batch size, push them to the DB
     private void batchUpsertWords(Collection<WordData> words) throws SQLException{
         try(PreparedStatement ps = conn.prepareStatement(WORD_UPSERT)){
             int n = 0;
-            //get each pair as one Map.Entry and load word, total, start, and end frequency in the prep statement and add it to batch later
+            //get one word object at a time and call the getter functions to add to the prep statement and add it to batch later
             for(WordData w : words){
                 ps.setString(1, w.getWord());
                 ps.setLong(2, w.getTotalFrequency());
@@ -228,14 +226,16 @@ public class DatabaseManager implements AutoCloseable {
 
     }
 
-    //take in teh map of maps of from word and the map of their to words
+    //take in teh Collection fo TransitionData objects, since each transitionData object has an outgoing next word edge, we can shorten it to one loop through
+    //next word will have to be handled by ingestion
     //batch the queries as we go and on reaching our batch size push them to the DB
     private void batchUpsertTransition(Collection<TransitionData> transitions) throws SQLException{
         try(PreparedStatement ps = conn.prepareStatement(TRANSITION_UPSERT)){
             int n = 0;
+            //get one transition object at a time and call the getter functions to add to the prep statement and add it to batch later
             for(TransitionData t: transitions){
                 ps.setString(1, t.getWord());
-                ps.setString(2, t.getWord());
+                ps.setString(2, t.getNextWord());
                 ps.setInt(3, t.getFrequency());
 
                 ps.addBatch();
@@ -243,7 +243,7 @@ public class DatabaseManager implements AutoCloseable {
                 if(++n %  BATCH_SIZE == 0)
                     ps.executeBatch();
             }
-
+            //account for any leftover words in the remaining batch
             ps.executeBatch();
         }
     }

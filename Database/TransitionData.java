@@ -3,7 +3,7 @@ package Database;
 public class TransitionData {
     private final String word;
     private final String nextWord;
-    private int frequency;
+    private int frequency = 1;
 
     public TransitionData(String word, String nextWord){
         this.word = word;
