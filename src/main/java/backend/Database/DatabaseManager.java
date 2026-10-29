@@ -11,9 +11,9 @@
 
 
 
-package Database;
+package backend.Database;
 import java.sql.*;
-import java.util.Map;
+import java.util.Collection;
 
 
 //The class has AutoCloseable so we can open it from any script and call connection.close() to close it
@@ -193,7 +193,7 @@ public class DatabaseManager implements AutoCloseable {
     //to batch update the words we need the all or nothing commit + words list + transitions
     //Map<String, long[]> words and Map<String, Map<String, int>> transitions
     //the long array for words holds total, start and end frequencies and transition is a map of maps of word x->word y
-    public void addBatch(Map<String, long[]> words, Map<String, Map<String, Integer>> transitions) throws SQLException{
+    public void batchAdd(Collection<WordData> words, Collection<TransitionData> transitions) throws SQLException{
 
         //use the lambda function in the same way its used in removeWord to overload the SqlAction's run
         inTransaction(() -> {
@@ -201,19 +201,19 @@ public class DatabaseManager implements AutoCloseable {
             batchUpsertTransition(transitions);
         });
     }
-//pass a class for the data over a map or a list of classes for the batching
 
-    //take the pased words and set them as the upsert statement's value
+
+    //take the pased collection of WordData objects
     //batch the queries as we go and on reaching our batch size, push them to the DB
-    private void batchUpsertWords(Map<String, long[]> words) throws SQLException{
+    private void batchUpsertWords(Collection<WordData> words) throws SQLException{
         try(PreparedStatement ps = conn.prepareStatement(WORD_UPSERT)){
             int n = 0;
-            //get each pair as one Map.Entry and load word, total, start, and end frequency in the prep statement and add it to batch later
-            for(Map.Entry<String, long[]> e: words.entrySet()){
-                ps.setString(1, e.getKey());
-                ps.setLong(2, e.getValue()[0]);
-                ps.setLong(3, e.getValue()[1]);
-                ps.setLong(4, e.getValue()[2]);
+            //get one word object at a time and call the getter functions to add to the prep statement and add it to batch later
+            for(WordData w : words){
+                ps.setString(1, w.getWord());
+                ps.setLong(2, w.getTotalFrequency());
+                ps.setLong(3, w.getStartFrequency());
+                ps.setLong(4, w.getEndFrequency());
 
                 ps.addBatch();
                 //once we reach our specified batch size, execute the query
@@ -226,26 +226,24 @@ public class DatabaseManager implements AutoCloseable {
 
     }
 
-    //take in teh map of maps of from word and the map of their to words
+    //take in teh Collection fo TransitionData objects, since each transitionData object has an outgoing next word edge, we can shorten it to one loop through
+    //next word will have to be handled by ingestion
     //batch the queries as we go and on reaching our batch size push them to the DB
-    private void batchUpsertTransition(Map<String, Map<String, Integer>> transitions) throws SQLException{
+    private void batchUpsertTransition(Collection<TransitionData> transitions) throws SQLException{
         try(PreparedStatement ps = conn.prepareStatement(TRANSITION_UPSERT)){
             int n = 0;
-            //for each from word transition get the starting word(key) and the map(chain) of the following words
-            for(Map.Entry<String, Map<String, Integer>> fromWord : transitions.entrySet()){
-                for(Map.Entry<String, Integer> toWord : fromWord.getValue().entrySet()){
-                    ps.setString(1, fromWord.getKey());
-                    ps.setString(2, toWord.getKey());
-                    ps.setInt(3, toWord.getValue());
+            //get one transition object at a time and call the getter functions to add to the prep statement and add it to batch later
+            for(TransitionData t: transitions){
+                ps.setString(1, t.getWord());
+                ps.setString(2, t.getNextWord());
+                ps.setInt(3, t.getFrequency());
 
-                    ps.addBatch();
-                    //once we reach our batch size, execute the query
-                    if(++n % BATCH_SIZE == 0)
-                        ps.executeBatch();
+                ps.addBatch();
 
-                }
+                if(++n %  BATCH_SIZE == 0)
+                    ps.executeBatch();
             }
-            //account for any leftober words in the remaining batch
+            //account for any leftover words in the remaining batch
             ps.executeBatch();
         }
     }
