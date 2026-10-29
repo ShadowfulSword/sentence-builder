@@ -21,6 +21,12 @@ public class CorpusRepository {
         String filename = "documents/project_gutenberg/moby-dick.txt"; //store filename ahead of time so it can be passed via frontend later
         boolean success = ing.openFile(filename);
         if (!success) {
+public class CorpusRepository{
+
+    public static void main(String[] args){
+        GutenbergIngestor ing = new GutenbergIngestor();
+        boolean success = ing.openFile("Gutenberg\\testcorpus.txt");
+        if(!success) {
             System.out.println("File not found");
             return;
         }
@@ -31,6 +37,11 @@ public class CorpusRepository {
             return;
         }
         System.out.println("Metadata took " + (System.nanoTime() - metaStart)/1_000_000 + "ms to exec");
+        if(!success) {
+            System.out.println("Metadata extraction failed");
+            return;
+        }
+
 
         DocumentMetadata metadata = ing.getMetadata();
         System.out.println(metadata.getTitle());
