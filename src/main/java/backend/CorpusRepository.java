@@ -1,6 +1,7 @@
-import Database.DatabaseManager;
-import Database.TransitionData;
-import Database.WordData;
+package backend;
+import backend.Database.DatabaseManager;
+import backend.Database.TransitionData;
+import backend.Database.WordData;
 
 import java.io.BufferedReader; //use buffer reader to read the file because it negates some of the IO calls that FileReader makes
 import java.io.FileReader;
@@ -17,7 +18,7 @@ public class CorpusRepository {
         long metaStart = System.nanoTime();
         GutenbergIngestor ing = new GutenbergIngestor();
 
-        String filename = "documents/project_gutenberg/great-gatsby.txt"; //store filename ahead of time so it can be passed via frontend later
+        String filename = "documents/project_gutenberg/moby-dick.txt"; //store filename ahead of time so it can be passed via frontend later
         boolean success = ing.openFile(filename);
         if (!success) {
             System.out.println("File not found");

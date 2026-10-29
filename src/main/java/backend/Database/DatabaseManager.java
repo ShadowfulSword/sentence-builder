@@ -11,7 +11,7 @@
 
 
 
-package Database;
+package backend.Database;
 import java.sql.*;
 import java.util.Collection;
 

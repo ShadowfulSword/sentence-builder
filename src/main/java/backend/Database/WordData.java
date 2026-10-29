@@ -9,7 +9,7 @@
 * October 25, 2026
 */
 
-package Database;
+package backend.Database;
 
 public class WordData {
 
