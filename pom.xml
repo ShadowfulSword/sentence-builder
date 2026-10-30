@@ -39,7 +39,7 @@
     </dependencies>
     <build>
     <plugins>
-        <!-- Run JUnit 5 consistently across Maven installations. -->
+        <!-- Yaseen Hafid yxh190036 10/30/26 Run JUnit 5 consistently across Maven installations. -->
         <plugin>
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-surefire-plugin</artifactId>
@@ -81,3 +81,4 @@
         </profile>
     </profiles>
 </project>
+
