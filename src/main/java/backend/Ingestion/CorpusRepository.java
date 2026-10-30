@@ -1,13 +1,8 @@
-package backend;
+package backend.Ingestion;
 import backend.Database.DatabaseManager;
 import backend.Database.TransitionData;
 import backend.Database.WordData;
 
-import java.io.BufferedReader; //use buffer reader to read the file because it negates some of the IO calls that FileReader makes
-import java.io.FileReader;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.Map;

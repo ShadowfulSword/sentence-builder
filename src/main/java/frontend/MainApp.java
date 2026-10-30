@@ -1,9 +1,9 @@
 // Oudom Pach OTP220001 10/20/2026
 package frontend;
 
-import backend.CorpusTokenizer;
-import backend.DocumentMetadata;
-import backend.GutenbergIngestor;
+import backend.Ingestion.CorpusTokenizer;
+import backend.Ingestion.DocumentMetadata;
+import backend.Ingestion.GutenbergIngestor;
 import frontend.state.AppState;
 import frontend.state.AppState.CorpusItem;
 import frontend.views.EditorView;
@@ -18,7 +18,7 @@ import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
-import java.nio.file.Files;
+
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 

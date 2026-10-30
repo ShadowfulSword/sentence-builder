@@ -1,4 +1,4 @@
-package backend;
+package backend.Ingestion;
 import java.util.Iterator;
 
 public class CorpusTokenizer implements Iterator<Token> {

@@ -1,6 +1,7 @@
 //Oudom Pach OTP220001 10/26/2026
 package backend;
 
+import backend.Ingestion.TextSanitizer;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
