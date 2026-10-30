@@ -12,18 +12,11 @@ import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.Map;
 
-public class CorpusRepository {
-    private static final String DB_URL = "jdbc:mysql://localhost:3306/sentence_builder?rewriteBatchedStatements=true"; //past the ? allows the DB to rewrite the batch calls together rather than as individual transactions when pased through
-    public static void main(String[] args) {
-        long metaStart = System.nanoTime();
-        GutenbergIngestor ing = new GutenbergIngestor();
-
-        String filename = "documents/project_gutenberg/moby-dick.txt"; //store filename ahead of time so it can be passed via frontend later
-        boolean success = ing.openFile(filename);
-        if (!success) {
 public class CorpusRepository{
-
+    private static final String DB_URL = "jdbc:mysql://localhost:3306/sentence_builder?rewriteBatchedStatements=true"; //past the ? allows the DB to rewrite the batch calls together rather than as individual transactions when pased through
     public static void main(String[] args){
+        long metaStart = System.nanoTime();
+
         GutenbergIngestor ing = new GutenbergIngestor();
         boolean success = ing.openFile("Gutenberg\\testcorpus.txt");
         if(!success) {
@@ -37,11 +30,6 @@ public class CorpusRepository{
             return;
         }
         System.out.println("Metadata took " + (System.nanoTime() - metaStart)/1_000_000 + "ms to exec");
-        if(!success) {
-            System.out.println("Metadata extraction failed");
-            return;
-        }
-
 
         DocumentMetadata metadata = ing.getMetadata();
         System.out.println(metadata.getTitle());
@@ -55,7 +43,7 @@ public class CorpusRepository{
         Map<String, TransitionData> transitions = new HashMap<>();
 
         long dbStart = System.nanoTime();
-        try (DatabaseManager db = new DatabaseManager(DB_URL, "root", "password")) { //replace with your password
+        try (DatabaseManager db = new DatabaseManager(DB_URL, "root", "")) { //replace with your password
             //don't import the file if it is already in the DB
             if (db.hasImportedFile(metadata.getTitle())) {
                 System.out.println("File " + metadata.getTitle() + " already imported to DB");
