@@ -1,9 +1,17 @@
+package backend;
+import backend.Database.DatabaseManager;
+import backend.Database.TransitionData;
+import backend.Database.WordData;
+
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+
 
 //markov chain sentence generator that picks each word by its percentage
 public class ProbabilisticGenerator {
@@ -22,40 +30,6 @@ public class ProbabilisticGenerator {
     public ProbabilisticGenerator(Random random, int maxWords) { //stores the random number and the max words
         this.random = random;
         this.maxWords = maxWords;
-    }
-
-    public void observeSentence(String sentence) { //observes a sentence and tokenizes it
-        observe(tokenize(sentence));
-    }
-
-    public void observe(List<String> words) {
-        List<String> cleaned = new ArrayList<>(); //list of cleaned words
-        if (words != null) { //if the words are not null
-            for (String word : words) { //iterates through the words
-                if (word == null) { //skips null words
-                    continue;
-                }
-                String normalized = word.toLowerCase().trim(); //normalizes the word to lowercase and trims whitespace
-                if (!normalized.isEmpty()) { //makes sure the word is not empty
-                    cleaned.add(normalized); //adds the word to the list
-                }
-            }
-        }
-        if (cleaned.isEmpty()) { //if the list of cleaned words is empty
-            return; //skips the sentence
-        }
-
-        startCounts.merge(cleaned.get(0), 1, Integer::sum); //adds the first word and starts counting otherwise adds 1
-        for (int i = 0; i < cleaned.size(); i++) { 
-            String word = cleaned.get(i); //gets the word from the clean array
-            if (i == cleaned.size() - 1) { //checks if its the last word
-                endCounts.merge(word, 1, Integer::sum); //adds the word and starts counting otherwise adds 1
-            } else {
-                transitions
-                        .computeIfAbsent(word, key -> new HashMap<>()) //creates a new inner hashmap for the word if it doesn't exist
-                        .merge(cleaned.get(i + 1), 1, Integer::sum); //adds the next word and starts counting otherwise adds 1
-            }
-        }
     }
 
     public String generate() {
@@ -97,19 +71,6 @@ public class ProbabilisticGenerator {
         return weights;
     }
 
-    static List<String> tokenize(String sentence) { //simple tokenizer will be replaced with the corpus tokenizer when merged
-        List<String> words = new ArrayList<>(); 
-        if (sentence == null) { //skips if the sentence is null
-            return words;
-        }
-        for (String part : sentence.toLowerCase().split("\\W+")) { //splits the sentence into words
-            if (!part.isEmpty()) { //makes sure the word is not empty
-                words.add(part); //adds the word to the list
-            }
-        }
-        return words; //returns the list of words
-    }
-
     private String pickByPercentage(Map<String, Integer> weights) { //chance of a word is its count divided by the total
         int total = 0;
         for (int weight : weights.values()) { //iterates through the weights
@@ -138,22 +99,33 @@ public class ProbabilisticGenerator {
 
     public static void main(String[] args) {
         ProbabilisticGenerator generator = new ProbabilisticGenerator(); //creates a new generator
-        String[] sample = { //sample sentences to observe will be replaced when database is merged
-                "the cat sat on the mat",
-                "the cat sat on the mat",
-                "the cat sat on the mat",
-                "the cat sat on the rug",
-                "the dog sat on the mat",
-                "the cat ran to the park",
-                "a bird flew to the park"
-        };
-        for (String sentence : sample) {
-            generator.observeSentence(sentence); //observes the sentence
+        Random random = new Random();
+        String currentWord = "the";
+
+
+        try (DatabaseManager db = new DatabaseManager(DatabaseManager.DB_URL, "root", "")) { //replace with your password
+            System.out.print(currentWord + " ");
+            for (int i = 0; i < 20; i++) {
+                ArrayList<TransitionData> transitions = db.getTransitions(currentWord);
+                WordData word = db.getWordData(currentWord);
+                int randomWord = random.nextInt(word.getTotalFrequency());
+                //System.out.print(currentWord + " ");
+                for(TransitionData data : transitions) {
+                    currentWord = data.getNextWord();
+                    randomWord -= data.getFrequency();
+                    if(randomWord <= 0) {
+                        break;
+                    }
+                }
+
+                System.out.print(currentWord + " ");
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
         }
 
-        for (int i = 0; i < 8; i++) {
-            System.out.println(generator.generate()); //generates a new sentence
-        }
+
+
     }
 
     private static void printWeights(Map<String, Integer> weights) { //prints the weights of the words

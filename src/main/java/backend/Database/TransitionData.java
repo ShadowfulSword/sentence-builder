@@ -20,6 +20,12 @@ public class TransitionData {
         this.nextWord = nextWord;
     }
 
+    public TransitionData(String word, String nextWord, int frequency){
+        this.word = word;
+        this.nextWord = nextWord;
+        this.frequency = frequency;
+    }
+
     public void addFrequency(){frequency++;} //always increment beacuse method will only  be called on needed update
 
     //getter methods

@@ -30,6 +30,13 @@ public class WordData {
             endFrequency++;
     }
 
+    public WordData(String word, int totalFrequency, int startFrequency, int endFrequency){
+        this.word = word;
+        this.totalFrequency = totalFrequency;
+        this.startFrequency = startFrequency;
+        this.endFrequency = endFrequency;
+    }
+
     //a function to update a word's frequency
     //since it will only be called when a freq change happens, always increment total freq
     public void addOccurrence(boolean isStart, boolean isEnd){

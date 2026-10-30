@@ -19,6 +19,7 @@ public class TextSanitizer {
      * @DateWritten 10/20/2026
      */
     public static String sanitize(String text){
+        text = text.replaceAll("[-—]", " ");
         String sanitizedString = removePunctuation(text);
         sanitizedString = sanitizedString.toLowerCase();
         sanitizedString = sanitizedString.strip();

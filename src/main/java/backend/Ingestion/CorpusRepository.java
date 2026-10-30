@@ -7,13 +7,14 @@ import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.Map;
 
+import static backend.Database.DatabaseManager.DB_URL;
+
 public class CorpusRepository{
-    private static final String DB_URL = "jdbc:mysql://localhost:3306/sentence_builder?rewriteBatchedStatements=true"; //past the ? allows the DB to rewrite the batch calls together rather than as individual transactions when pased through
     public static void main(String[] args){
         long metaStart = System.nanoTime();
 
         GutenbergIngestor ing = new GutenbergIngestor();
-        boolean success = ing.openFile("Gutenberg\\testcorpus.txt");
+        boolean success = ing.openFile("documents\\project_gutenberg\\a-farewell-to-arms.txt");
         if(!success) {
             System.out.println("File not found");
             return;
