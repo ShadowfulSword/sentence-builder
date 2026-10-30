@@ -2,7 +2,7 @@
  *  ProbabilisticGenerator class
  *
  * Interfaces with the database to generate next words based on their
- * relative weighting withing the data set. 
+ * relative weighting withing the data set.
  *
  * Written by Gabriel Goble (GGG220000) for CS4488.0W1, Sentance-Builder Project,
  * October 30, 2026
@@ -27,6 +27,24 @@ import java.util.Random;
 //markov chain sentence generator that picks each word by its percentage
 public class ProbabilisticGenerator {
     public static final String END = "";
+    private static final Random random = new Random();
+
+
+
+    private static String getRandomNextWord(WordData currentWord, ArrayList<TransitionData> transitions)
+    {
+        int randomWord = random.nextInt(currentWord.getTotalFrequency());
+        String nextWord = "";
+        for(TransitionData data : transitions) {
+            nextWord = data.getNextWord();
+            randomWord -= data.getFrequency();
+            if(randomWord <= 0) {
+                break;
+            }
+        }
+
+        return nextWord;
+    }
 
     /**
      * Generates a sentence of length sentenceLength + 1 starting with your seed word.
@@ -38,22 +56,13 @@ public class ProbabilisticGenerator {
      */
     private static void generateSentence(String seedWord, int sentenceLength, DatabaseManager db)
     {
-        Random random = new Random();
         String currentWord = seedWord;
         System.out.print(currentWord + " ");
         for (int i = 0; i < sentenceLength; i++) {
             ArrayList<TransitionData> transitions = db.getTransitions(currentWord);
             WordData word = db.getWordData(currentWord);
-            int randomWord = random.nextInt(word.getTotalFrequency());
 
-            for(TransitionData data : transitions) {
-                currentWord = data.getNextWord();
-                randomWord -= data.getFrequency();
-                if(randomWord <= 0) {
-                    break;
-                }
-            }
-
+            currentWord = getRandomNextWord(word, transitions);
             System.out.print(currentWord + " ");
         }
         System.out.println();
