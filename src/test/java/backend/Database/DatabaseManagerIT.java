@@ -1,4 +1,6 @@
- // checks for MySQL schema and DatabaseManager writes for GH issue #24
+// Yaseen Hafid yxh190036 10/30/26
+
+// checks for MySQL schema and DatabaseManager writes for GH issue #24
 
 package backend.Database;
 
