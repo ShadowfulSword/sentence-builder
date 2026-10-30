@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
-//markov chain sentence generator
+//markov chain sentence generator that picks each word by its percentage
 public class ProbabilisticGenerator {
     public static final String END = "";
 
@@ -59,14 +59,14 @@ public class ProbabilisticGenerator {
     }
 
     public String generate() {
-        String word = pickWeighted(startCounts); //picks a random word from the start counts hashmap
+        String word = pickByPercentage(startCounts); //picks a starting word using its share of the start counts
         if (word == null) { // skips if no word is picked
             return "";
         }
 
         StringBuilder sentence = new StringBuilder(word);//starts with the word picked from the previous step
         for (int count = 1; count < maxWords; count++) { //max sure it doesn't go over the max words
-            String next = nextWord(word); //picks one of the following words based on the probability of the following words
+            String next = nextWord(word); //picks the next word using its percentage
             if (next == null) { //skips if no word is picked
                 break; //stops the loop
             }
@@ -77,7 +77,7 @@ public class ProbabilisticGenerator {
     }
 
     public String nextWord(String current) { //picks next word based on current word and the transition frequency of following words
-        String choice = pickWeighted(nextWeights(current)); //picks a random word from the next weights hashmap
+        String choice = pickByPercentage(nextWeights(current)); //picks a follower using its share of the counts
         if (choice == null || END.equals(choice)) { //skips if no word is picked or the word is the end of the sentence
             return null;
         }
@@ -110,26 +110,26 @@ public class ProbabilisticGenerator {
         return words; //returns the list of words
     }
 
-    private String pickWeighted(Map<String, Integer> weights) { //picks a random word from the weights hashmap
+    private String pickByPercentage(Map<String, Integer> weights) { //chance of a word is its count divided by the total
         int total = 0;
         for (int weight : weights.values()) { //iterates through the weights
             if (weight > 0) { //adds the weight to the total if it is greater than 0
-                total += weight; //adds the weight to the total
+                total += weight;
             }
         }
         if (total <= 0) { //skips if the total is less than or equal to 0
-            return null; //returns null if the total is less than or equal to 0
+            return null;
         }
 
-        int roll = random.nextInt(total); //generates a random number between 0 and the total
+        int roll = random.nextInt(total); //a number from 0 up to the total, so each count is one slice of 100 percent
         int cumulative = 0;
         for (Map.Entry<String, Integer> entry : weights.entrySet()) { //iterates through the weights
             int weight = entry.getValue(); //gets the weight of the word
             if (weight <= 0) { //skips if the weight is less than or equal to 0
-                continue; //skips the word
+                continue;
             }
-            cumulative += weight; //adds the weight to the cumulative
-            if (roll < cumulative) { //checks if the random number is less than the cumulative other wise goes again and adds another word weight
+            cumulative += weight; //this word owns the next `weight` numbers, which is weight/total of the roll
+            if (roll < cumulative) {
                 return entry.getKey();
             }
         }
@@ -151,13 +151,6 @@ public class ProbabilisticGenerator {
             generator.observeSentence(sentence); //observes the sentence
         }
 
-        System.out.println("Next-word weights after \"the\":");
-        printWeights(generator.nextWeights("the")); //prints the next word weights after "the"
-        System.out.println();
-        System.out.println("Next-word weights after \"cat\":");
-        printWeights(generator.nextWeights("cat")); //prints the next word weights after "cat"
-        System.out.println();
-        System.out.println("Generated sentences:");
         for (int i = 0; i < 8; i++) {
             System.out.println(generator.generate()); //generates a new sentence
         }
