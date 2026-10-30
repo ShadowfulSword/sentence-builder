@@ -28,15 +28,15 @@ public class DatabaseManager implements AutoCloseable {
 
     //upsert statement for transition and word that either inserts new word or updates on existing word
     private static final String WORD_UPSERT = "INSERT INTO words (word, total_frequency, start_frequency, end_frequency) "
-            + "VALUES (?, ?, ?, ?) AS new_data "
+            + "VALUES (?, ?, ?, ?) "
             + "ON DUPLICATE KEY UPDATE "
-            + "total_frequency = words.total_frequency + new_data.total_frequency, "
-            + "start_frequency = words.start_frequency + new_data.start_frequency, "
-            + "end_frequency = words.end_frequency + new_data.end_frequency";
+            + "total_frequency = words.total_frequency + VALUES(total_frequency), "
+            + "start_frequency = words.start_frequency + VALUES(start_frequency), "
+            + "end_frequency = words.end_frequency + VALUES(end_frequency)";
     private static final String TRANSITION_UPSERT = "INSERT INTO transitions (word, next_word, frequency) "
-            + "VALUES (?, ?, ?) AS new_data "
+            + "VALUES (?, ?, ?)  "
             + "ON DUPLICATE KEY UPDATE "
-            + "frequency = transitions.frequency + new_data.frequency";
+            + "frequency = transitions.frequency + VALUES(frequency)";
 
     //connection constructor takes in your url(see below). username and password of your DB connection
     //url takes the form of: "jdbc:mysql://hostname:port/database_name"
