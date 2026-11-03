@@ -18,6 +18,22 @@ Factory Method pattern:
     we can just call these static styling so a view can get the styling without having to write more styling code
 
  */
+// Oudom Pach OTP220001 11/3/2026
+
+
+/*
+    Without `UIFactory`, creating a styled label takes 3 lines:
+    ```java
+    Label l = new Label("Hello");
+    l.getStyleClass().add("muted");
+    // pass l to parent
+    ```
+
+    With `UIFactory`, it's 1 line:
+    ```java
+    UIFactory.label("Hello", "muted")
+
+ */
 public final class UIFactory {
     private UIFactory() {}
 

@@ -10,6 +10,8 @@ import javafx.collections.transformation.FilteredList;
 import javafx.scene.Node;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
+
+import java.sql.SQLException;
 import java.util.Comparator;
 import java.util.Map;
 /*
@@ -123,9 +125,19 @@ public class VocabularyView {
                 int s = Integer.parseInt(starts.getText());
                 int e = Integer.parseInt(ends.getText());
                 if (t < 0 || s < 0 || e < 0 || s > t || e > t) throw new IllegalArgumentException();
+                // Oudom Pach OTP220001 11/3/2026
+                // Persist to MySQL if available
+                if (state.isDatabaseConnected()) {
+                    state.updateWordInDb(w.text(), t, s, e);
+                    state.setStatus("Word counts for '" + w.text() + "' saved to MySQL database");
+                } else {
+                    state.setStatus("Word counts saved in memory; no database connected");
+                }
+
                 // Replace the old word record in the state list with the updated counts
                 state.getWords().set(state.getWords().indexOf(w), new WordItem(w.text(), t, s, e, w.follows()));
-                state.setStatus("Word counts saved in memory; no database configured");
+            } catch (SQLException sqlEx) {
+                state.setStatus("Database error: " + sqlEx.getMessage());
             } catch (IllegalArgumentException ex) {
                 state.setStatus("Enter nonnegative counts; start and end counts cannot exceed total.");
             }
@@ -136,15 +148,26 @@ public class VocabularyView {
             WordItem w = table.getSelectionModel().getSelectedItem();
             if (w == null) return;
             Alert confirm = new Alert(Alert.AlertType.CONFIRMATION,
-                    "Delete '" + w.text() + "' from the local model?", ButtonType.CANCEL, ButtonType.OK);
+                    "Delete '" + w.text() + "' from " + (state.isDatabaseConnected() ? "MySQL database and " : "") + "the local model?",
+                    ButtonType.CANCEL, ButtonType.OK);
             // If user clicks OK, remove the word and all of its follow-word transitions
+            // Oudom Pach OTP220001 11/3/2026
             if (confirm.showAndWait().orElse(ButtonType.CANCEL) == ButtonType.OK) {
+                if (state.isDatabaseConnected()) {
+                    try {
+                        state.deleteWordFromDb(w.text());
+                        state.setStatus("Word '" + w.text() + "' deleted from MySQL database");
+                    } catch (SQLException sqlEx) {
+                        state.setStatus("Database deletion error: " + sqlEx.getMessage());
+                    }
+                } else {
+                    state.setStatus("Word deleted from in-memory model");
+                }
                 state.getWords().remove(w);
                 state.getTransitions().remove(w.text());
                 state.getTransitions().values().forEach(m -> m.remove(w.text()));
                 selected.setText("Select a word");
                 pairs.getItems().clear();
-                state.setStatus("Word deleted from in-memory model");
             }
         });
 

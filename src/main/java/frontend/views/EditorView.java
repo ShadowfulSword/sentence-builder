@@ -100,7 +100,7 @@ public class EditorView {
         HBox.setHgrow(algoBox, Priority.ALWAYS);
         HBox controls = new HBox(15, algoBox, new VBox(7, new Label("Batch Count"), count));
 
-        CheckBox selfIngest = new CheckBox("Self-Ingest generated sentences into DB (local demo)");
+        CheckBox selfIngest = new CheckBox("Self-Ingest generated sentences into DB");
         VBox batch = new VBox(9);
         List<CheckBox> selections = new ArrayList<>();
         List<String> generated = new ArrayList<>(Arrays.asList(AppState.SAMPLES));
@@ -126,15 +126,15 @@ public class EditorView {
             }
         };
         render.run();
-
-        // Logic for if generate sentence is chceked then the sentence is fed back into injestor. For self injestion
+        // Oudom Pach OTP220001 11/3/2026
+        // Logic for if generate sentence is checked then the sentence is fed back into ingestor
         Button generate = UIFactory.button("Generate Sentences", "primary", () -> {
             generated.clear();
             for (int i = 0; i < count.getValue(); i++) {
                 String sentence = state.generateMockSentence(starting.getText(), algorithm.getValue().startsWith("Weighted"));
                 generated.add(sentence);
                 state.getHistory().add(new LogItem(sentence, UIFactory.now(), algorithm.getValue()));
-                if (selfIngest.isSelected()) state.ingestDemoText(sentence);
+                if (selfIngest.isSelected()) state.selfIngestSentence(sentence);
             }
             render.run();
         });

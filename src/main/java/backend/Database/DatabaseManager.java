@@ -13,12 +13,33 @@
 
 package backend.Database;
 import java.sql.*;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 
 
 //The class has AutoCloseable so we can open it from any script and call connection.close() to close it
 //or open connections with a try-with-resources to AutoClose
 public class DatabaseManager implements AutoCloseable {
+    // Oudom Pach OTP220001 11/3/2026
+    // Default connection parameters with fallback to environment variables
+    public static final String DEFAULT_URL = "jdbc:mysql://localhost:3306/sentence_builder?rewriteBatchedStatements=true";
+    public static final String DEFAULT_USER = "root";
+    public static final String DEFAULT_PASSWORD = "";
+
+    // Record to represent an imported file row
+    public record ImportedFileRecord(int id, String filename, int wordCount, String importDate) {}
+
+    // Factory method to establish a connection using environment variables (SB_DB_URL, SB_DB_USER, SB_DB_PASSWORD) or defaults
+    public static DatabaseManager createDefault() throws SQLException {
+        String url = System.getenv("SB_DB_URL");
+        if (url == null || url.isBlank()) url = DEFAULT_URL;
+        String user = System.getenv("SB_DB_USER");
+        if (user == null) user = DEFAULT_USER;
+        String pword = System.getenv("SB_DB_PASSWORD");
+        if (pword == null) pword = DEFAULT_PASSWORD;
+        return new DatabaseManager(url, user, pword);
+    }
 
     //the cion object associated with all the functions. should not be mutable
     private final Connection conn;
@@ -246,5 +267,79 @@ public class DatabaseManager implements AutoCloseable {
             //account for any leftover words in the remaining batch
             ps.executeBatch();
         }
+    }
+    // Oudom Pach OTP220001 11/3/2026
+    // Retrieve all words stored in the words table
+    public List<WordData> getAllWords() throws SQLException {
+        List<WordData> words = new ArrayList<>();
+        String sql = "SELECT word, total_frequency, start_frequency, end_frequency FROM words ORDER BY total_frequency DESC";
+        try (PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                words.add(new WordData(
+                        rs.getString("word"),
+                        rs.getInt("total_frequency"),
+                        rs.getInt("start_frequency"),
+                        rs.getInt("end_frequency")
+                ));
+            }
+        }
+        return words;
+    }
+
+    // Retrieve all transitions stored in the transitions table
+    public List<TransitionData> getAllTransitions() throws SQLException {
+        List<TransitionData> transitions = new ArrayList<>();
+        String sql = "SELECT word, next_word, frequency FROM transitions";
+        try (PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                transitions.add(new TransitionData(
+                        rs.getString("word"),
+                        rs.getString("next_word"),
+                        rs.getInt("frequency")
+                ));
+            }
+        }
+        return transitions;
+    }
+
+    // Retrieve all transitions for a given word
+    public List<TransitionData> getTransitionsForWord(String word) throws SQLException {
+        List<TransitionData> transitions = new ArrayList<>();
+        String sql = "SELECT word, next_word, frequency FROM transitions WHERE word = ? ORDER BY frequency DESC";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, word);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    transitions.add(new TransitionData(
+                            rs.getString("word"),
+                            rs.getString("next_word"),
+                            rs.getInt("frequency")
+                    ));
+                }
+            }
+        }
+        return transitions;
+    }
+
+    // Retrieve all imported files from the imported_files table
+    public List<ImportedFileRecord> getImportedFiles() throws SQLException {
+        List<ImportedFileRecord> files = new ArrayList<>();
+        String sql = "SELECT file_id, filename, wordcount, import_date FROM imported_files ORDER BY import_date DESC";
+        try (PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                Timestamp ts = rs.getTimestamp("import_date");
+                String dateStr = ts != null ? ts.toString() : "";
+                files.add(new ImportedFileRecord(
+                        rs.getInt("file_id"),
+                        rs.getString("filename"),
+                        rs.getInt("wordcount"),
+                        dateStr
+                ));
+            }
+        }
+        return files;
     }
 }

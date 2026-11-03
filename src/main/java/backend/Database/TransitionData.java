@@ -19,6 +19,12 @@ public class TransitionData {
         this.word = word;
         this.nextWord = nextWord;
     }
+    // Oudom Pach OTP220001 11/3/2026
+    public TransitionData(String word, String nextWord, int frequency){
+        this.word = word;
+        this.nextWord = nextWord;
+        this.frequency = frequency;
+    }
 
     public void addFrequency(){frequency++;} //always increment beacuse method will only  be called on needed update
 

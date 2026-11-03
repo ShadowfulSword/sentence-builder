@@ -2,15 +2,19 @@
 package frontend;
 
 import backend.CorpusTokenizer;
+import backend.Database.DatabaseManager;
+import backend.Database.TransitionData;
+import backend.Database.WordData;
 import backend.DocumentMetadata;
 import backend.GutenbergIngestor;
+import backend.Token;
 import frontend.state.AppState;
 import frontend.state.AppState.CorpusItem;
 import frontend.views.EditorView;
 import frontend.views.ReportsView;
 import frontend.views.VocabularyView;
 import javafx.application.Application;
-import javafx.application.Platform;
+import javafx.concurrent.Task;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.Scene;
@@ -18,10 +22,10 @@ import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
-import java.nio.file.Files;
-import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
 
+import java.io.File;
+import java.io.IOException;
+import java.util.*;
 
 /*
     MainApp Class:
@@ -32,6 +36,17 @@ import java.util.concurrent.CompletableFuture;
 public class MainApp extends Application {
     // Instantiate the central shared state container for the entire application UI
     private final AppState state = new AppState();
+    private DatabaseManager databaseManager;
+    private boolean isDatabaseConnected = false;
+
+    private record IngestionResult(
+            DocumentMetadata metadata,
+            String title,
+            int totalWords,
+            Collection<WordData> words,
+            Collection<TransitionData> transitions,
+            boolean savedToDatabase
+    ) {}
 
     /*
         start Method:
@@ -40,9 +55,32 @@ public class MainApp extends Application {
      */
     @Override
     public void start(Stage stage) {
+        // Oudom Pach OTP220001 11/3/2026
+        // Attempt database connection on startup
+        try {
+            databaseManager = DatabaseManager.createDefault();
+            isDatabaseConnected = true;
+            state.loadFromDatabase(databaseManager);
+        } catch (Exception ex) {
+            isDatabaseConnected = false;
+            databaseManager = null;
+            state.setStatus("MySQL offline — running in local demo mode (" + ex.getMessage() + ")");
+        }
+
+        // Clean up connection on exit
+        stage.setOnCloseRequest(e -> {
+            if (databaseManager != null) {
+                try {
+                    databaseManager.close();
+                } catch (Exception ex) {
+                    System.err.println("Error closing database: " + ex.getMessage());
+                }
+            }
+        });
+
         BorderPane root = new BorderPane();
         root.setTop(buildHeader(stage));
-
+        //each tab shares the same state and build method returnes node for javafx scene graph subtree, unavailble means tab can't be closed
         TabPane tabs = new TabPane();
         tabs.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
         tabs.getTabs().addAll(
@@ -52,12 +90,16 @@ public class MainApp extends Application {
         );
         root.setCenter(tabs);
 
+        //status bar
         Label status = new Label();
+
+        //observer property here for .bind when any code calls it label automatically updates
         status.textProperty().bind(state.statusTextProperty());
         status.getStyleClass().add("status-bar");
         status.setMaxWidth(Double.MAX_VALUE);
         root.setBottom(status);
 
+        //sets the scene and uses the theme.css to import styling
         Scene scene = new Scene(root, 1280, 800);
         var cssUrl = getClass().getResource("/theme.css");
         if (cssUrl != null) {
@@ -77,66 +119,163 @@ public class MainApp extends Application {
         the live file ingestion progress bar and status tracker, and an asynchronous file chooser button
         to load external Project Gutenberg .txt corpora without blocking the UI thread.
      */
+
+    //UI factory is called here and creates styled label in one call so we dont have to write any boilerplate
     private Node buildHeader(Stage stage) {
         Label title = UIFactory.label("Sentence Builder", "brand");
         VBox brand = new VBox(5, title, UIFactory.label("A little probability. Endless possibilities.", "muted"));
-        Label connection = UIFactory.label("Local demo • MySQL not connected", "badge");
+        Label connection = UIFactory.label(
+                isDatabaseConnected ? "● MySQL Connected" : "○ MySQL Offline (Local Demo)",
+                "badge"
+        );
 
-        ProgressBar progress = new ProgressBar(0.78);
+        ProgressBar progress = new ProgressBar(0.0);
         progress.setMaxWidth(Double.MAX_VALUE);
-        Label importing = UIFactory.label("Demo ingestion: pride_and_prejudice.txt — 78%", "muted");
-        Label parsed = UIFactory.label("96,420 words parsed · sample progress", "muted");
+        Label importing = UIFactory.label("Ingestion: Idle", "muted");
+        Label parsed = UIFactory.label("Select a Project Gutenberg .txt corpus to begin", "muted");
         VBox ingestion = new VBox(5, importing, progress, parsed);
         ingestion.setPrefWidth(330);
 
+        //this is where connects to backend
         Button load = new Button("+ Import .txt Corpus");
         load.getStyleClass().add("primary");
-        // Replace the load.setOnAction block in frontend/MainApp.java
         load.setOnAction(event -> {
             FileChooser chooser = new FileChooser();
-            chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Project Gutenberg Text", "*.txt"));
-            var selected = chooser.showOpenDialog(stage);
+            chooser.setTitle("Select Project Gutenberg Corpus");
+            chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Project Gutenberg Text (*.txt)", "*.txt"));
+            File selected = chooser.showOpenDialog(stage);
             if (selected == null) return;
 
             load.setDisable(true);
-            progress.setProgress(-1); // Progress bar untouched for your teammate
-            importing.setText("Ingesting: " + selected.getName());
+            progress.setProgress(0.0);
+            importing.setText("Opening: " + selected.getName());
+            parsed.setText("Starting background ingestion...");
 
-            CompletableFuture.supplyAsync(() -> {
-                try {
+            // Background worker task to avoid freezing the JavaFX UI
+            Task<IngestionResult> task = new Task<>() {
+                @Override
+                protected IngestionResult call() throws Exception {
+                    updateMessage("Opening " + selected.getName() + "...");
+                    updateProgress(0, 100);
+
                     GutenbergIngestor ingestor = new GutenbergIngestor();
                     if (!ingestor.openFile(selected.getAbsolutePath())) {
-                        throw new RuntimeException("File not found");
+                        throw new IOException("File not found or cannot be opened: " + selected.getName());
                     }
+
+                    updateMessage("Extracting metadata...");
                     if (!ingestor.extractMetadata()) {
-                        throw new RuntimeException("Metadata extraction failed");
+                        throw new IOException("Project Gutenberg metadata extraction failed: " + selected.getName());
                     }
-                    return ingestor;
-                } catch (Exception ex) {
-                    throw new RuntimeException(ex);
+                    // Oudom Pach OTP220001 11/3/2026
+                    DocumentMetadata meta = ingestor.getMetadata();
+                    String bookTitle = (meta.getTitle() != null && !meta.getTitle().isBlank())
+                            ? meta.getTitle()
+                            : selected.getName();
+
+                    // Prevent duplicate imports into the database
+                    if (isDatabaseConnected && databaseManager != null && databaseManager.hasImportedFile(bookTitle)) {
+                        throw new IllegalStateException("Corpus \"" + bookTitle + "\" has already been imported into the database.");
+                    }
+
+                    updateMessage("Tokenizing & analyzing " + bookTitle + "...");
+                    CorpusTokenizer tokenizer = new CorpusTokenizer(ingestor);
+                    Map<String, WordData> words = new HashMap<>();
+                    Map<String, TransitionData> transitions = new HashMap<>();
+                    Token prev = null;
+                    int totalWords = 0;
+                    long totalBytes = meta.getSizeBytes() > 0 ? meta.getSizeBytes() : selected.length();
+
+                    while (tokenizer.hasNext()) {
+                        Token token = tokenizer.next();
+                        String word = token.getWord();
+                        if (word == null || word.isEmpty()) continue;
+                        totalWords++;
+
+                        WordData exists = words.get(word);
+                        if (exists == null) {
+                            words.put(word, new WordData(word, token.isStart(), token.isEnd()));
+                        } else {
+                            exists.addOccurrence(token.isStart(), token.isEnd());
+                        }
+
+                        if (prev != null && !prev.isEnd()) {
+                            String key = prev.getWord() + "\0" + word;
+                            TransitionData t = transitions.get(key);
+                            if (t == null) {
+                                transitions.put(key, new TransitionData(prev.getWord(), word));
+                            } else {
+                                t.addFrequency();
+                            }
+                        }
+                        prev = token;
+
+                        if (totalWords % 1000 == 0) {
+                            long bytesRead = ingestor.getBytesRead();
+                            updateProgress(bytesRead, totalBytes);
+                            updateMessage(String.format("Ingesting: %,d words (%,d KB)...", totalWords, bytesRead / 1024));
+                        }
+                    }
+
+                    boolean savedToDb = false;
+                    if (isDatabaseConnected && databaseManager != null) {
+                        updateMessage(String.format("Persisting %,d words and %,d bi-grams to MySQL...", words.size(), transitions.size()));
+                        databaseManager.batchAdd(words.values(), transitions.values());
+                        databaseManager.addImportedFile(bookTitle, totalWords);
+                        savedToDb = true;
+                    }
+
+                    return new IngestionResult(meta, bookTitle, totalWords, words.values(), transitions.values(), savedToDb);
                 }
-            }).whenComplete((ingestor, error) -> Platform.runLater(() -> {
+            };
+
+            // Bind task progress & status text directly to UI controls
+            progress.progressProperty().bind(task.progressProperty());
+            importing.textProperty().bind(task.messageProperty());
+
+            task.setOnSucceeded(e -> {
+                progress.progressProperty().unbind();
+                importing.textProperty().unbind();
                 load.setDisable(false);
-                progress.setProgress(error == null ? 1 : 0); // Progress bar untouched
+                progress.setProgress(1.0);
 
-                if (error != null) {
-                    importing.setText("Import failed");
-                    state.setStatus("Unable to read file: " + error.getCause().getMessage());
-                    return;
-                }
+                IngestionResult result = task.getValue();
+                DocumentMetadata meta = result.metadata();
+                importing.setText("Imported: " + result.title() + " — 100%");
+                parsed.setText(String.format("Author: %s (Book #%d) · %,d words parsed",
+                        meta.getAuthor() != null ? meta.getAuthor() : "Unknown",
+                        meta.getBookNumber(),
+                        result.totalWords()));
 
-                DocumentMetadata meta = ingestor.getMetadata();
-                CorpusTokenizer tokenizer = new CorpusTokenizer(ingestor);
-                state.ingestCorpusStream(tokenizer);
+                state.applyIngestedCorpus(result.title(), result.totalWords(), meta.getSizeBytes(), result.words(), result.transitions());
+                state.setStatus(result.savedToDatabase()
+                        ? "Corpus saved to MySQL and loaded into memory: " + result.title()
+                        : "Corpus loaded into memory (local offline mode): " + result.title());
+            });
 
-                String bookTitle = meta.getTitle() != null ? meta.getTitle() : selected.getName();
-                importing.setText("Imported: " + bookTitle + " — 100%");
-                parsed.setText(String.format("Author: %s (Book #%d)", meta.getAuthor() != null ? meta.getAuthor() : "Unknown", meta.getBookNumber()));
+            task.setOnFailed(e -> {
+                progress.progressProperty().unbind();
+                importing.textProperty().unbind();
+                load.setDisable(false);
+                progress.setProgress(0.0);
 
-                state.getCorpora().add(new CorpusItem(bookTitle, String.format("%,d bytes", meta.getSizeBytes()), UIFactory.now()));
-                state.setStatus("Project Gutenberg corpus successfully parsed and loaded");
-            }));
+                Throwable error = task.getException();
+                String message = error != null ? error.getMessage() : "Unknown error during ingestion";
+                importing.setText("Import failed");
+                parsed.setText(message);
+                state.setStatus("Unable to read file: " + message);
+
+                Alert alert = new Alert(Alert.AlertType.WARNING, message, ButtonType.OK);
+                alert.setTitle("Import Notice");
+                alert.setHeaderText("Corpus Ingestion Notice");
+                alert.showAndWait();
+            });
+
+            Thread thread = new Thread(task);
+            thread.setDaemon(true);
+            thread.start();
         });
+
         HBox row = new HBox(22, brand, connection, UIFactory.spacer(), ingestion, load);
         row.setAlignment(Pos.CENTER_LEFT);
         row.getStyleClass().add("header");
