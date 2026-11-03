@@ -27,3 +27,6 @@ replay_pid*
 #ignore the output file for the idea execution and build
 out/
 lib/
+
+# Maven build directory
+target/
