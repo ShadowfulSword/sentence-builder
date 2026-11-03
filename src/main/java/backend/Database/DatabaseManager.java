@@ -13,12 +13,15 @@
 
 package backend.Database;
 import java.sql.*;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 
 
 //The class has AutoCloseable so we can open it from any script and call connection.close() to close it
 //or open connections with a try-with-resources to AutoClose
 public class DatabaseManager implements AutoCloseable {
+    public static final String DB_URL = "jdbc:mysql://localhost:3306/sentence_builder?rewriteBatchedStatements=true"; //past the ? allows the DB to rewrite the batch calls together rather than as individual transactions when pased through
 
     //the cion object associated with all the functions. should not be mutable
     private final Connection conn;
@@ -37,6 +40,10 @@ public class DatabaseManager implements AutoCloseable {
             + "VALUES (?, ?, ?)  "
             + "ON DUPLICATE KEY UPDATE "
             + "frequency = transitions.frequency + VALUES(frequency)";
+    private static final String TRANSITION_GET = "SELECT t.next_word, t.frequency "
+            + "FROM transitions t "
+            + "WHERE t.word = ? "
+            + "ORDER BY t.frequency DESC ";
 
     //connection constructor takes in your url(see below). username and password of your DB connection
     //url takes the form of: "jdbc:mysql://hostname:port/database_name"
@@ -175,6 +182,36 @@ public class DatabaseManager implements AutoCloseable {
             conn.setAutoCommit(oldAutoCommit);
         }
     }
+
+    public ArrayList<TransitionData> getTransitions(String from_word)
+    {
+        try (PreparedStatement pstmt = conn.prepareStatement(TRANSITION_GET)){
+            pstmt.setString(1, from_word);
+            try(ResultSet rs = pstmt.executeQuery()){
+                ArrayList<TransitionData> result = new ArrayList<>();
+                while(rs.next())
+                    result.add(new TransitionData(from_word, rs.getString("next_word"), rs.getInt("frequency")));
+                return result;
+            }
+        } catch (SQLException e) {
+            return null;
+        }
+    }
+
+    public WordData getWordData(String word)
+    {
+        try (PreparedStatement pstmt = conn.prepareStatement("SELECT total_frequency, start_frequency, end_frequency FROM words w WHERE w.word = ?")){
+            pstmt.setString(1, word);
+            try(ResultSet rs = pstmt.executeQuery()){
+                rs.next();
+                return new WordData(word, rs.getInt("total_frequency"), rs.getInt("start_frequency"), rs.getInt("end_frequency"));
+            }
+        } catch (SQLException e) {
+            e.getStackTrace();
+            return null;
+        }
+    }
+
 
     //Remove a word from the word table and the word and every transition in the transitions table
     public boolean removeWord(String word) throws SQLException{

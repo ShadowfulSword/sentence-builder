@@ -8,7 +8,7 @@
  * Written by Gabriel Goble (GGG220000) for CS4485.0W1, Sentence-Builder Project,
  * starting October 20, 2026
  */
-package backend;
+package backend.Ingestion;
 public class TextSanitizer {
     /**
      * Performs the following operations on the input string: removes punctuation,
@@ -19,6 +19,7 @@ public class TextSanitizer {
      * @DateWritten 10/20/2026
      */
     public static String sanitize(String text){
+        text = text.replaceAll("[-—]", " ");
         String sanitizedString = removePunctuation(text);
         sanitizedString = sanitizedString.toLowerCase();
         sanitizedString = sanitizedString.strip();

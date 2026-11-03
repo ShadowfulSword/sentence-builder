@@ -12,7 +12,7 @@
  * Written by Gabriel Goble (GGG220000) for CS4485.0W1, Sentence-Builder Project,
  * starting October 16, 2026
  * ****************************************************************/
-package backend;
+package backend.Ingestion;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.nio.file.Files;

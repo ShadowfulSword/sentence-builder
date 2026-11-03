@@ -6,7 +6,7 @@ import javafx.beans.property.StringProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import java.util.*;
-import backend.Token;
+import backend.Ingestion.Token;
 
 /*
 Observer Method Pattern:
