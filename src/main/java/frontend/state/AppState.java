@@ -91,10 +91,11 @@ public class AppState {
             return;
         }
 
-        // Clear mock demo data
+        // Clear mock demo data and history
         words.clear();
         transitions.clear();
         corpora.clear();
+        history.clear();
 
         // Populate transitions
         for (TransitionData t : dbTransitions) {
