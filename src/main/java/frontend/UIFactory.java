@@ -18,7 +18,6 @@ Factory Method pattern:
     we can just call these static styling so a view can get the styling without having to write more styling code
 
  */
-// Oudom Pach OTP220001 11/3/2026
 
 
 /*
@@ -68,7 +67,7 @@ public final class UIFactory {
         VBox page = new VBox(12,
                 label("YOUR LANGUAGE LAB", "eyebrow"),
                 label(title, "title"),
-                label(subtitle, "muted"),
+                label(subtitle, "helper-text"),
                 content
         );
         page.setPadding(new Insets(25));
