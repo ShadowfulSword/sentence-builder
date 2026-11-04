@@ -279,7 +279,8 @@ public class DatabaseManager implements AutoCloseable {
         try(PreparedStatement ps = conn.prepareStatement(query)){
             ps.setString(1, word);
             try(ResultSet rs = ps.executeQuery()){
-                rows.add(new FollowerRow(rs.getString(1), rs.getInt(2)));
+                while(rs.next())
+                    rows.add(new FollowerRow(rs.getString(1), rs.getInt(2)));
             }
         }
         return  rows;
