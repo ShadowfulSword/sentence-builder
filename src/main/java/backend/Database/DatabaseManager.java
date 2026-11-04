@@ -12,8 +12,11 @@
 
 
 package backend.Database;
+import javax.xml.transform.Result;
 import java.sql.*;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 
 
 //The class has AutoCloseable so we can open it from any script and call connection.close() to close it
@@ -246,5 +249,39 @@ public class DatabaseManager implements AutoCloseable {
             //account for any leftover words in the remaining batch
             ps.executeBatch();
         }
+    }
+
+    //word row, each word followed by its counts and the number of unique follows sorted alphabetically
+    public List<WordRow> getAllWords() throws SQLException{
+        List<WordRow> rows = new ArrayList<>();
+        //use left join to recieve words that are only ever at the end of the sentances and have them set to 0
+        String query = """
+                SELECT w.word, w.total_frequency, w.start_frequency, w.end_frequency, COUNT(t.next_word)
+                FROM words w LEFT JOIN transitions t ON t.word = w.word
+                GROUP BY w.word, w.total_frequency, w.start_frequency, w.end_frequency
+                ORDER BY w.word""";
+
+        try(Statement s = conn.createStatement()){
+            try(ResultSet rs = s.executeQuery(query)){
+                while(rs.next()){
+                    rows.add(new WordRow(rs.getString(1), rs.getInt(2), rs.getInt(3), rs.getInt(4), rs.getInt(5)));
+                }
+            }
+        }
+        return rows;
+    }
+
+    //get every word that follows the passed word in most frequent and alphabetical order
+    //empty list = no follows (end of sentances)
+    public List<FollowerRow> getFollowers(String word) throws SQLException{
+        List<FollowerRow> rows = new ArrayList<>();
+        String query = "SELECT next_word, frequency FROM transitions where word = ? ORDER BY frequency DESC, next_word ASC";
+        try(PreparedStatement ps = conn.prepareStatement(query)){
+            ps.setString(1, word);
+            try(ResultSet rs = ps.executeQuery()){
+                rows.add(new FollowerRow(rs.getString(1), rs.getInt(2)));
+            }
+        }
+        return  rows;
     }
 }

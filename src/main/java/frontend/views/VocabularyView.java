@@ -1,17 +1,25 @@
 // Oudom Pach OTP220001 10/20/2026
 package frontend.views;
 
+import backend.Database.DatabaseConfig;
+import backend.Database.DatabaseManager;
+import backend.Database.FollowerRow;
 import frontend.UIFactory;
 import frontend.state.AppState;
 import frontend.state.AppState.TransitionItem;
 import frontend.state.AppState.WordItem;
 import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
 import javafx.collections.transformation.FilteredList;
+import javafx.concurrent.Task;
 import javafx.scene.Node;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import java.util.Comparator;
-import java.util.Map;
+import java.util.List;
+import java.util.function.Consumer;
+
+
 /*
     Tab 2:
         provides searchable,sortable detail explorer that we can use to inspect word statistics and edit or delete database entries.
@@ -26,6 +34,9 @@ public class VocabularyView {
         this.state = state;
     }
 
+    //words shown in the table from the SQL table and only held in this tab
+    private  final ObservableList<WordItem> words = FXCollections.observableArrayList();
+
     // Builds and returns the complete JavaFX layout for the Vocabulary & DB Explorer tab
     public Node build() {
 
@@ -39,7 +50,7 @@ public class VocabularyView {
         minimum.setPrefWidth(100);
 
         // Wrap the main word list in a FilteredList so we can hide/show rows without deleting data
-        FilteredList<WordItem> filtered = new FilteredList<>(state.getWords());
+        FilteredList<WordItem> filtered = new FilteredList<>(words);
 
         // Define the filter condition: word must match search prefix AND meet minimum frequency
         Runnable filter = () -> filtered.setPredicate(
@@ -73,8 +84,16 @@ public class VocabularyView {
                 case 3 -> Comparator.comparingInt(WordItem::ends).reversed();   // Highest end count first
                 default -> Comparator.comparing(WordItem::text);                // A-Z alphabetical
             };
-            FXCollections.sort(state.getWords(), c);
+            FXCollections.sort(words, c);
         });
+
+        Runnable loadWords = () -> {
+            state.setStatus("Loading vocab from MySQL Database...");
+            runDb(DatabaseManager::getAllWords, rows -> {
+                words.setAll(rows.stream().map(r-> new WordItem(r.word(), r.total(), r.start(), r.end(), r.follows())).toList());
+                state.setStatus("Loaded " + rows.size() + " words from the Database");
+            }, "Could not connect to Database: ");
+        };
 
         // Assemble the left panel containing the filter bar, sort dropdown, and vocabulary table
         VBox left = UIFactory.panel("Vocabulary explorer",
@@ -105,12 +124,15 @@ public class VocabularyView {
             total.setText("" + w.total());
             starts.setText("" + w.starts());
             ends.setText("" + w.ends());
-            // Look up all words that follow the selected word and calculate their % probability
-            var map = state.getTransitions().getOrDefault(w.text(), Map.of());
-            int sum = map.values().stream().mapToInt(Integer::intValue).sum();
+           //ask MySQL for the words that folloed this one and get their probabiliteis
+            String word = w.text();
             pairs.getItems().clear();
-            map.forEach((next, n) -> pairs.getItems().add(
-                    new TransitionItem(next, n, String.format("%.1f%%", 100.0 * n / Math.max(1, sum)))));
+            runDb(db -> db.getFollowers(word), followers -> {
+                //the user may have clicked another word while this query ran, drop stale ansers
+                WordItem curr = table.getSelectionModel().getSelectedItem();
+                if(curr != null && curr.text().equals(word))
+                    showFollowers(pairs, followers);
+            }, "Could not load follow words: ");
         });
 
         // Button to validate and save manual edits made to a word's counts
@@ -123,9 +145,8 @@ public class VocabularyView {
                 int s = Integer.parseInt(starts.getText());
                 int e = Integer.parseInt(ends.getText());
                 if (t < 0 || s < 0 || e < 0 || s > t || e > t) throw new IllegalArgumentException();
-                // Replace the old word record in the state list with the updated counts
-                state.getWords().set(state.getWords().indexOf(w), new WordItem(w.text(), t, s, e, w.follows()));
-                state.setStatus("Word counts saved in memory; no database configured");
+                // Write the new counts to the DB: the table row is updated once SQL confirms that the update transaction happened
+                saveCount(w, t, s, e);
             } catch (IllegalArgumentException ex) {
                 state.setStatus("Enter nonnegative counts; start and end counts cannot exceed total.");
             }
@@ -136,15 +157,16 @@ public class VocabularyView {
             WordItem w = table.getSelectionModel().getSelectedItem();
             if (w == null) return;
             Alert confirm = new Alert(Alert.AlertType.CONFIRMATION,
-                    "Delete '" + w.text() + "' from the local model?", ButtonType.CANCEL, ButtonType.OK);
+                    "Delete \"" + w.text() + "\" from the Database?", ButtonType.CANCEL, ButtonType.OK);
             // If user clicks OK, remove the word and all of its follow-word transitions
+            //delete in mysql then reload the table
             if (confirm.showAndWait().orElse(ButtonType.CANCEL) == ButtonType.OK) {
-                state.getWords().remove(w);
-                state.getTransitions().remove(w.text());
-                state.getTransitions().values().forEach(m -> m.remove(w.text()));
-                selected.setText("Select a word");
-                pairs.getItems().clear();
-                state.setStatus("Word deleted from in-memory model");
+                runDb(db -> db.removeWord(w.text()), removed -> {
+                    selected.setText("Select a word");
+                    pairs.getItems().clear();
+                    state.setStatus(removed ? "Deleted \"" + w.text() + "\" from the Database" : "\"" + w.text() + "\" was already gone");
+                    loadWords.run();
+                }, "Couldn't delete from Database: ");
             }
         });
 
@@ -161,10 +183,70 @@ public class VocabularyView {
         SplitPane split = new SplitPane(left, right);
         split.setDividerPositions(0.65);
 
+        loadWords.run();
+
         // Wrap the split pane in the standard page header layout and return it
         return UIFactory.page(
                 "Every word has a story.",
                 "Explore your corpus and inspect the connections between words.",
                 split);
+    }
+
+    //a db call that is handed an openmanager and sends result back
+    @FunctionalInterface
+    private interface DbQuery<T>{
+        T run(DatabaseManager db) throws Exception;
+    }
+
+    //get th eoriginal eception so the status can show where fail happned
+    //mneeded it for debug
+    private static String rootMessage(Throwable t){
+        while(t.getCause() != null)
+            t = t.getCause();
+        return t.getMessage();
+    }
+    //Run the query in a background thread to not freeze the window (so we can keep showing things like progress bar)
+    //Then bring it back to the JavaFX thread.
+    //return result or error based on success
+    //All calls must pass through her so threads and error handeling is centeralized
+    //making use of standard javafx transaction template
+    private <T> void runDb(DbQuery<T> query, Consumer<T> onSuccess, String err){
+        Task<T> task = new Task<T>(){
+            @Override
+            protected T call() throws Exception{ //run this on a background thread
+                try(DatabaseManager db = DatabaseConfig.open()){
+                    return query.run(db);
+                }
+            }
+        };
+        //tjese are on the JavaFx thread and are allowed to touch the UI withpout freeze
+        task.setOnSucceeded(e -> onSuccess.accept(task.getValue()));
+        task.setOnFailed(e-> state.setStatus(err + rootMessage(task.getException())));
+
+        Thread thread = new Thread(task);
+        thread.setDaemon(true); //set config to let app close even on leftover query
+        thread.start();
+    }
+
+    //fill in the follow table and work out each word's prob based on frequency
+    //we can change this if we want it to do it based on algorithm
+    private void showFollowers(TableView<TransitionItem> pairs, List<FollowerRow> followers){
+        int sum = followers.stream().mapToInt(FollowerRow::follows).sum();
+        for(FollowerRow f : followers)
+            pairs.getItems().add(new TransitionItem(f.word(), f.follows(), String.format("%.1f%%", 100.0 * f.follows() / Math.max(1, sum))));
+    }
+
+    //Write the new update counts to mySQL then updates the tabel once MySQL confirms change
+    private void saveCount(WordItem word, int total, int start, int end){
+        runDb(db -> db.updateWordFrequencies(word.text(), total, start, end), saved -> {
+            if(!saved){
+                state.setStatus("\"" + word.text() + "\" is no longer in the database. Please reload and try again");
+                return;
+            }
+            int index = words.indexOf(word);
+            if(index >= 0)
+                words.set(index, new WordItem(word.text(), total, start, end, word.follows()));
+            state.setStatus("Saved changes of \"" + word.text() + "\" to the Database");
+        },"Couldn't save to the Database: ");
     }
 }

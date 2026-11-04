@@ -18,7 +18,7 @@ public class CorpusRepository{
         long metaStart = System.nanoTime();
 
         GutenbergIngestor ing = new GutenbergIngestor();
-        boolean success = ing.openFile("Gutenberg\\testcorpus.txt");
+        boolean success = ing.openFile("documents/project_gutenberg/romeo-juliet.txt");
         if(!success) {
             System.out.println("File not found");
             return;
@@ -43,7 +43,7 @@ public class CorpusRepository{
         Map<String, TransitionData> transitions = new HashMap<>();
 
         long dbStart = System.nanoTime();
-        try (DatabaseManager db = new DatabaseManager(DB_URL, "root", "")) { //replace with your password
+        try (DatabaseManager db = new DatabaseManager(DB_URL, "root", "password")) { //replace with your password
             //don't import the file if it is already in the DB
             if (db.hasImportedFile(metadata.getTitle())) {
                 System.out.println("File " + metadata.getTitle() + " already imported to DB");
