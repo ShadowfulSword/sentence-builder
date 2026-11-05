@@ -29,7 +29,7 @@ public class WordData {
         if(isEnd)
             endFrequency++;
     }
-    // Oudom Pach OTP220001 11/3/2026
+    // Oudom Pach OTP220001 11/3/2026 Revised: Added 4-argument constructor with full frequencies for database hydration
     public WordData(String word, int totalFrequency, int startFrequency, int endFrequency){
         this.word = word;
         this.totalFrequency = totalFrequency;

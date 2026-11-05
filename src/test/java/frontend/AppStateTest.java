@@ -1,3 +1,4 @@
+// Oudom Pach OTP220001 11/3/2026 Unit tests for AppState in-memory data structures and corpus ingestion
 package frontend;
 
 import backend.Database.TransitionData;
@@ -65,5 +66,24 @@ public class AppStateTest {
         assertEquals("great", transition.getWord());
         assertEquals("white", transition.getNextWord());
         assertEquals(8, transition.getFrequency());
+    }
+
+    @Test
+    void testGenerateMockSentenceProducesValidSentence() {
+        WordData w1 = new WordData("whale", 10, 5, 0);
+        WordData w2 = new WordData("ocean", 5, 0, 5);
+        TransitionData t1 = new TransitionData("whale", "ocean", 4);
+        state.applyIngestedCorpus("Test Corpus", 15, 1024, List.of(w1, w2), List.of(t1));
+
+        String sentence = state.generateMockSentence("whale", true);
+        assertNotNull(sentence);
+        assertTrue(sentence.startsWith("Whale"));
+        assertTrue(sentence.endsWith("."));
+
+        // Test with null or empty seed
+        String defaultSentence = state.generateMockSentence(null, true);
+        assertNotNull(defaultSentence);
+        assertTrue(defaultSentence.startsWith("It"));
+        assertTrue(defaultSentence.endsWith("."));
     }
 }

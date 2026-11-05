@@ -1,4 +1,4 @@
-// Oudom Pach OTP220001 10/20/2026
+// Oudom Pach OTP220001 10/20/2026 Initial Creation: Vocabulary and database explorer tab
 package frontend.views;
 
 import frontend.UIFactory;
@@ -125,7 +125,7 @@ public class VocabularyView {
                 int s = Integer.parseInt(starts.getText());
                 int e = Integer.parseInt(ends.getText());
                 if (t < 0 || s < 0 || e < 0 || s > t || e > t) throw new IllegalArgumentException();
-                // Oudom Pach OTP220001 11/3/2026
+                // Oudom Pach OTP220001 11/3/2026 Revised: Added persistence to update word frequencies directly in MySQL database
                 // Persist to MySQL if available
                 if (state.isDatabaseConnected()) {
                     state.updateWordInDb(w.text(), t, s, e);
@@ -151,7 +151,7 @@ public class VocabularyView {
                     "Delete '" + w.text() + "' from " + (state.isDatabaseConnected() ? "MySQL database and " : "") + "the local model?",
                     ButtonType.CANCEL, ButtonType.OK);
             // If user clicks OK, remove the word and all of its follow-word transitions
-            // Oudom Pach OTP220001 11/3/2026
+            // Oudom Pach OTP220001 11/3/2026 Revised: Added persistence to remove word from MySQL database
             if (confirm.showAndWait().orElse(ButtonType.CANCEL) == ButtonType.OK) {
                 if (state.isDatabaseConnected()) {
                     try {

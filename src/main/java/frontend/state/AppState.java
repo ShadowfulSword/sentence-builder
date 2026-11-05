@@ -1,4 +1,4 @@
-// Oudom Pach OTP220001 10/20/2026
+// Oudom Pach OTP220001 10/20/2026 Initial Creation: Central observable application state container
 package frontend.state;
 
 import backend.Database.DatabaseManager;
@@ -74,7 +74,7 @@ public class AppState {
     // Updates the footer status bar message across the application
     public void setStatus(String message) { statusText.set(message); }
 
-    // Oudom Pach OTP220001 11/3/2026 setup connection to MySQL
+    // Oudom Pach OTP220001 11/3/2026 Revised: Added MySQL connection handling and database hydration for words and transitions
     public DatabaseManager getDatabaseManager() { return databaseManager; }
     public void setDatabaseManager(DatabaseManager databaseManager) { this.databaseManager = databaseManager; }
     public boolean isDatabaseConnected() { return databaseManager != null; }
@@ -151,6 +151,7 @@ public class AppState {
         corpora.add(0, new CorpusItem(bookTitle, String.format("%,d words", totalWords), UIFactory.now()));
     }
 
+    // Oudom Pach OTP220001 11/3/2026 Revised: Added self-ingestion to persist generated sentences to MySQL and UI state
     // Self-ingests a generated sentence into both the database (if connected) and in-memory collections
     public void selfIngestSentence(String sentence) {
         String clean = sentence.toLowerCase().replaceAll("[^\\p{L}\\p{N}' ]", " ").trim();
@@ -244,8 +245,8 @@ public class AppState {
     // Mock Sentence Generator (To be replaced by Backend Strategy classes later)
     // will just use basic calculations of the sum of all follow word counts and picks next word will use our actual algorithim instead
     public String generateMockSentence(String first, boolean weighted) {
-        // Clean the user's starting word (take the first word in lowercase, or default to "it" if blank)
-        String current = first.strip().toLowerCase().split("\\s+")[0];
+        // Clean the user's starting word (take the first word in lowercase, or default to "it" if blank/null)
+        String current = (first == null || first.isBlank()) ? "it" : first.strip().toLowerCase().split("\\s+")[0];
         if (current.isBlank()) current = "it";
         List<String> result = new ArrayList<>();
         result.add(current);
@@ -286,7 +287,7 @@ public class AppState {
         return Character.toUpperCase(sentence.charAt(0)) + sentence.substring(1) + ".";
     }
 
-    // Ingestion stream iterator helper (in-memory parsing)
+    // Oudom Pach OTP220001 10/25/2026 Revised: Added stream ingestion iterator helper to parse corpus tokens and bi-grams
     public void ingestCorpusStream(Iterator<Token> tokenizer) {
         Map<String, int[]> counts = new TreeMap<>();
         // Preserve existing counts from previous imports

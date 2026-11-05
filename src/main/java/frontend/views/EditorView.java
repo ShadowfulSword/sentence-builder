@@ -1,4 +1,4 @@
-// Oudom Pach OTP220001 10/20/2026
+// Oudom Pach OTP220001 10/20/2026 Initial Creation: Composition text editor and sentence generator tab
 package frontend.views;
 
 import frontend.UIFactory;
@@ -31,6 +31,7 @@ public class EditorView {
         editor.setPrefHeight(340);
         editor.setPromptText("Type your composition here, or generate and add sentences from the right panel...");
 
+        // Oudom Pach OTP220001 11/3/2026 Revised: Added dynamic predictive suggestions and TAB auto-complete
         // Holds the top suggested word so typing TAB automatically chooses it
         final String[] topWordForTab = new String[1];
 
@@ -178,6 +179,7 @@ public class EditorView {
         };
         render.run();
 
+        // Oudom Pach OTP220001 11/3/2026 Revised: Connected sentence generation to Markov algorithm and self-ingestion
         // Logic for generating sentences using the active algorithm
         Button generate = UIFactory.button("Generate Sentences", "primary", () -> {
             generated.clear();

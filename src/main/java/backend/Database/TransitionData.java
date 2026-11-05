@@ -19,7 +19,7 @@ public class TransitionData {
         this.word = word;
         this.nextWord = nextWord;
     }
-    // Oudom Pach OTP220001 11/3/2026
+    // Oudom Pach OTP220001 11/3/2026 Revised: Added 3-argument constructor with frequency count for database hydration
     public TransitionData(String word, String nextWord, int frequency){
         this.word = word;
         this.nextWord = nextWord;

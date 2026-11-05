@@ -21,7 +21,7 @@ import java.util.List;
 //The class has AutoCloseable so we can open it from any script and call connection.close() to close it
 //or open connections with a try-with-resources to AutoClose
 public class DatabaseManager implements AutoCloseable {
-    // Oudom Pach OTP220001 11/3/2026
+    // Oudom Pach OTP220001 11/3/2026 Revised: Added default connection constants and createDefault factory method
     // Default connection parameters with fallback to environment variables
     public static final String DEFAULT_URL = "jdbc:mysql://localhost:3306/sentence_builder?rewriteBatchedStatements=true";
     public static final String DEFAULT_USER = "root";
@@ -268,7 +268,7 @@ public class DatabaseManager implements AutoCloseable {
             ps.executeBatch();
         }
     }
-    // Oudom Pach OTP220001 11/3/2026
+    // Oudom Pach OTP220001 11/3/2026 Revised: Added getAllWords, getAllTransitions, and getImportedFiles database retrieval queries
     // Retrieve all words stored in the words table
     public List<WordData> getAllWords() throws SQLException {
         List<WordData> words = new ArrayList<>();

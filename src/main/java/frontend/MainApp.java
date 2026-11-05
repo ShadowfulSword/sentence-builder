@@ -1,4 +1,4 @@
-// Oudom Pach OTP220001 10/20/2026
+// Oudom Pach OTP220001 10/16/2026 Initial Creation: Root application container and JavaFX stage
 package frontend;
 
 import backend.CorpusTokenizer;
@@ -55,7 +55,7 @@ public class MainApp extends Application {
      */
     @Override
     public void start(Stage stage) {
-        // Oudom Pach OTP220001 11/3/2026
+        // Oudom Pach OTP220001 11/3/2026 Revised: Connect to MySQL on startup and load persistent database state
         // Attempt database connection on startup
         try {
             databaseManager = DatabaseManager.createDefault();
@@ -78,6 +78,7 @@ public class MainApp extends Application {
             }
         });
 
+        // Oudom Pach OTP220001 10/20/2026 Revised: Implemented BorderPane layout with 3-tab navigation shell and theme styling
         BorderPane root = new BorderPane();
         root.setTop(buildHeader(stage));
         //each tab shares the same state and build method returnes node for javafx scene graph subtree, unavailble means tab can't be closed
@@ -120,6 +121,7 @@ public class MainApp extends Application {
         to load external Project Gutenberg .txt corpora without blocking the UI thread.
      */
 
+    // Oudom Pach OTP220001 10/20/2026 Revised: Added navigation header with brand and ingestion progress UI
     //UI factory is called here and creates styled label in one call so we dont have to write any boilerplate
     private Node buildHeader(Stage stage) {
         Label title = UIFactory.label("Sentence Builder", "brand");
@@ -136,6 +138,7 @@ public class MainApp extends Application {
         VBox ingestion = new VBox(5, importing, progress, parsed);
         ingestion.setPrefWidth(330);
 
+        // Oudom Pach OTP220001 10/25/2026 Revised: Hooked up GutenbergIngestor and background Task ingestion
         //this is where connects to backend
         Button load = new Button("+ Import .txt Corpus");
         load.getStyleClass().add("primary");
@@ -167,7 +170,7 @@ public class MainApp extends Application {
                     if (!ingestor.extractMetadata()) {
                         throw new IOException("Project Gutenberg metadata extraction failed: " + selected.getName());
                     }
-                    // Oudom Pach OTP220001 11/3/2026
+                    // Oudom Pach OTP220001 11/3/2026 Revised: Added MySQL duplicate check and batch persistence for words and transitions
                     DocumentMetadata meta = ingestor.getMetadata();
                     String bookTitle = (meta.getTitle() != null && !meta.getTitle().isBlank())
                             ? meta.getTitle()

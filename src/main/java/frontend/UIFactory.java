@@ -1,4 +1,4 @@
-// Oudom Pach OTP220001 10/20/2026
+// Oudom Pach OTP220001 10/20/2026 Initial Creation: Static UI component and styling factory
 package frontend;
 
 import javafx.beans.property.ReadOnlyStringWrapper;
@@ -63,6 +63,7 @@ public final class UIFactory {
         return box;
     }
 
+    // Oudom Pach OTP220001 11/3/2026 Revised: Added table column helper and helper-text label styles
     public static VBox page(String title, String subtitle, Node content) {
         VBox page = new VBox(12,
                 label("YOUR LANGUAGE LAB", "eyebrow"),

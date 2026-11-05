@@ -1,4 +1,4 @@
-/* Oudom Pach OTP220001 10/20/26 */
+/* Oudom Pach OTP220001 10/20/2026 Initial Dark UI Theme */
 .root {
     -fx-base: #101318;
     -fx-background: #101318;
@@ -39,6 +39,7 @@
     -fx-font-size: 11px;
 }
 
+/* Oudom Pach OTP220001 11/3/2026 Revised: Added helper-text styling */
 .helper-text {
     -fx-text-fill: #ffffff;
     -fx-font-size: 11px;
@@ -73,6 +74,7 @@
     -fx-font-family: "Consolas", "Monospaced";
     -fx-font-size: 15px;
     -fx-text-fill: #e0e3ec;
+    /* Oudom Pach OTP220001 11/3/2026 Revised: Added prompt text fill styling */
     -fx-prompt-text-fill: #ffffff;
     -fx-border-color: #2d333d;
     -fx-border-radius: 6px;
