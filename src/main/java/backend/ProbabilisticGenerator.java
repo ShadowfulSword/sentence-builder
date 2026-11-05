@@ -28,13 +28,39 @@ import java.util.Random;
 public class ProbabilisticGenerator {
     public static final String END = "";
     private static final Random random = new Random();
+    private DatabaseManager db = null;
 
+    public ProbabilisticGenerator() {
+        try { //replace with your password
+            this.db = new DatabaseManager(DatabaseManager.DB_URL, "root", "");
+        }
+        catch (SQLException e)
+        {
+            throw new RuntimeException(e);
+        }
+    }
 
-
-    private static String getRandomNextWord(WordData currentWord, ArrayList<TransitionData> transitions)
+    /**
+     * Takes a word as input and returns a new word which is selected proportionally to how often
+     * the new word appeared after the current word in the training corpora.
+     * @param currentWord The word we want to act as the seed when selecting the next word
+     * @return A random next word
+     * @DateWritten 10/29/26 Updated: 11/5/2026
+     * @author Gabriel Goble, Alex Chan
+     */
+    public String getRandomNextWord(WordData currentWord)
     {
+        if(db == null)
+            return null;
+        //get the list of possible next words
+        ArrayList<TransitionData> transitions =  db.getTransitions(currentWord.getWord());
+
+        //get a random number that will be associated with a specific word
         int randomWord = random.nextInt(currentWord.getTotalFrequency());
         String nextWord = "";
+
+        //until our random number is reduced to zero, repeatedly subtract word weights
+        //from it, this ensures the probability a word is selected is proportional on its weight
         for(TransitionData data : transitions) {
             nextWord = data.getNextWord();
             randomWord -= data.getFrequency();
@@ -43,6 +69,7 @@ public class ProbabilisticGenerator {
             }
         }
 
+        //return the word
         return nextWord;
     }
 
@@ -50,31 +77,25 @@ public class ProbabilisticGenerator {
      * Generates a sentence of length sentenceLength + 1 starting with your seed word.
      * @param seedWord Word you want the sentence to start with
      * @param sentenceLength How many additional words should be after the seed
-     * @param db A DatabaseManager object
      * @DateWritten 10/30/2026
      * @author Gabriel Goble (GGG220000)
      */
-    private static void generateSentence(String seedWord, int sentenceLength, DatabaseManager db)
+    public String generateSentence(String seedWord, int sentenceLength)
     {
+        if(db == null)
+            return null;
+        
+        StringBuilder sentence = new StringBuilder();
+
         String currentWord = seedWord;
-        System.out.print(currentWord + " ");
         for (int i = 0; i < sentenceLength; i++) {
-            ArrayList<TransitionData> transitions = db.getTransitions(currentWord);
             WordData word = db.getWordData(currentWord);
 
-            currentWord = getRandomNextWord(word, transitions);
-            System.out.print(currentWord + " ");
-        }
-        System.out.println();
-    }
-    public static void main(String[] args) {
-        try (DatabaseManager db = new DatabaseManager(DatabaseManager.DB_URL, "root", "")) { //replace with your password
-            generateSentence("the", 15, db);
-        } catch (SQLException e) {
-            throw new RuntimeException(e);
+            currentWord = getRandomNextWord(word);
+            sentence.append(currentWord).append(" ");
         }
 
-
+        return sentence.toString();
     }
 
     private static void printWeights(Map<String, Integer> weights) { //prints the weights of the words
