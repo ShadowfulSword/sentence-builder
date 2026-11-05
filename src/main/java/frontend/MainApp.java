@@ -99,35 +99,58 @@ public class MainApp extends Application {
             if (selected == null) return;
 
             load.setDisable(true);
-            progress.setProgress(-1); // Progress bar untouched for your teammate
+            progress.setProgress(0); // Progress bar untouched for your teammate
             importing.setText("Ingesting: " + selected.getName());
+
+            GutenbergIngestor ingestor = new GutenbergIngestor();
+
+            // Poller to update the progress bar UI from background thread
+            javafx.animation.Timeline progressPoller = new javafx.animation.Timeline(
+                new javafx.animation.KeyFrame(javafx.util.Duration.millis(150), e -> {
+                    long totalBytes = ingestor.getMetadata().getSizeBytes();
+                    long currentBytes = ingestor.getBytesRead();
+                    if (totalBytes > 0) {
+                        double currentProgress = (double) ingestor.getBytesRead() / ingestor.getMetadata().getSizeBytes();
+                        progress.setProgress(currentProgress);
+                        importing.setText(String.format("Ingesting: %s - %.0f%%", selected.getName(), currentProgress * 100));
+                        parsed.setText(String.format("%,d / %,d bytes read", currentBytes, totalBytes));
+                    }
+                })
+            );
+            progressPoller.setCycleCount(javafx.animation.Animation.INDEFINITE);
 
             CompletableFuture.supplyAsync(() -> {
                 try {
-                    GutenbergIngestor ingestor = new GutenbergIngestor();
                     if (!ingestor.openFile(selected.getAbsolutePath())) {
                         throw new RuntimeException("File not found");
                     }
                     if (!ingestor.extractMetadata()) {
                         throw new RuntimeException("Metadata extraction failed");
                     }
+
+                    // Begins polling UI after file size is extracted from metadata
+                    Platform.runLater(progressPoller::play);
+
+                    CorpusTokenizer tokenizer = new CorpusTokenizer(ingestor);
+                    state.ingestCorpusStream(tokenizer);
+
                     return ingestor;
                 } catch (Exception ex) {
                     throw new RuntimeException(ex);
                 }
-            }).whenComplete((ingestor, error) -> Platform.runLater(() -> {
+            }).whenComplete((result, error) -> Platform.runLater(() -> {
+                Platform.runLater(progressPoller::stop); // Stops polling after the task on the background thread finishes
                 load.setDisable(false);
-                progress.setProgress(error == null ? 1 : 0); // Progress bar untouched
 
                 if (error != null) {
+                    progress.setProgress(0);
                     importing.setText("Import failed");
                     state.setStatus("Unable to read file: " + error.getCause().getMessage());
                     return;
                 }
 
+                progress.setProgress(1);
                 DocumentMetadata meta = ingestor.getMetadata();
-                CorpusTokenizer tokenizer = new CorpusTokenizer(ingestor);
-                state.ingestCorpusStream(tokenizer);
 
                 String bookTitle = meta.getTitle() != null ? meta.getTitle() : selected.getName();
                 importing.setText("Imported: " + bookTitle + " — 100%");
