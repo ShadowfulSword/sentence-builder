@@ -111,6 +111,22 @@ public class MainApp extends Application {
                     if (!ingestor.extractMetadata()) {
                         throw new RuntimeException("Metadata extraction failed");
                     }
+
+                    // Poller to update the progress bar UI from background thread
+                    javafx.animation.Timeline progressPoller = new javafx.animation.Timeline(
+                        new javafx.animation.KeyFrame(javafx.util.Duration.millis(150), e -> {
+                            double current = (double) ingestor.getBytesRead() / ingestor.getMetadata().getSizeBytes();
+                            progress.setProgress(current);
+                        })
+                    );
+                    progressPoller.setCycleCount(javafx.animation.Animation.INDEFINITE);
+                    Platform.runLater(progressPoller::play);
+
+                    CorpusTokenizer tokenizer = new CorpusTokenizer(ingestor);
+                    state.ingestCorpusStream(tokenizer);
+
+                    Platform.runLater(progressPoller::stop);
+
                     return ingestor;
                 } catch (Exception ex) {
                     throw new RuntimeException(ex);
@@ -126,8 +142,6 @@ public class MainApp extends Application {
                 }
 
                 DocumentMetadata meta = ingestor.getMetadata();
-                CorpusTokenizer tokenizer = new CorpusTokenizer(ingestor);
-                state.ingestCorpusStream(tokenizer);
 
                 String bookTitle = meta.getTitle() != null ? meta.getTitle() : selected.getName();
                 importing.setText("Imported: " + bookTitle + " — 100%");
