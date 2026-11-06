@@ -313,4 +313,24 @@ public class DatabaseManager implements AutoCloseable {
         }
         return rows;
     }
+
+    //get one random word from the DB or null if the table has nothing in yet
+    public String getRandomWord() throws SQLException{
+        int totalRow = 0;
+        try(Statement s = conn.createStatement()){
+            ResultSet rs = s.executeQuery("SELECT COUNT(*) FROM words");
+            rs.next();
+            totalRow = rs.getInt(1);
+        }
+        if(totalRow == 0)
+            return null;
+
+        int rand = (int)(Math.random() * totalRow);
+        try(PreparedStatement ps = conn.prepareStatement("SELECT word FROM words ORDER BY word LIMIT  1 OFFSET ?")){
+            ps.setInt(1, rand);
+            try(ResultSet rs = ps.executeQuery()){
+                return  rs.next() ? rs.getString(1) : null;
+            }
+        }
+    }
 }
