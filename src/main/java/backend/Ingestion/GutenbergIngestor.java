@@ -11,6 +11,8 @@
  *
  * Written by Gabriel Goble (GGG220000) for CS4485.0W1, Sentence-Builder Project,
  * starting October 16, 2026
+ *
+ * Edited by Yaseen Hafid (yxh190036) on 11/06/2026
  * ****************************************************************/
 package backend.Ingestion;
 import java.io.BufferedReader;
@@ -25,13 +27,15 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class GutenbergIngestor {
+// #18: callers can close the reader explicitly, including during test cleanup (yaseen)
+public class GutenbergIngestor implements AutoCloseable {
     final private DocumentMetadata metadata;
     private BufferedReader bufferedReader;
-    private String sanitizedSentence;
     private String currentParagraph;
     private boolean eof = false;
     private long bytesRead = 0;
+    // #18: stop reading the body when the Gutenberg footer begins (yaseen)
+    private static final String END_MARKER = "*** END OF THE PROJECT GUTENBERG EBOOK";
 
     //Regex patterns used to ensure paragraphs are valid in grabSentence() method
     private final Pattern punctuationPattern = Pattern.compile("[.!?;]");
@@ -43,9 +47,8 @@ public class GutenbergIngestor {
 
     public GutenbergIngestor(){
         metadata = new DocumentMetadata();
-        sanitizedSentence = "";
         currentParagraph = "";
-    }
+    }         // #18: sentences are now sanitized on demand, so i removed the old sentence buffer (yaseen)
 
     /**
      Opens the file at the specified path for ingestion.
@@ -74,56 +77,50 @@ public class GutenbergIngestor {
      @author Gabriel Goble (GGG220000)
      @DateWritten 10/16/2026
      */
-    public boolean extractMetadata()
-    {
-        //Metadata is always formatted in the order Title, Author
-        //Release Date, ebook number
 
-        String currentLine = "";
-
-        //Extract Title
-        while(!currentLine.contains("Title:"))
-        {
-            currentLine = getNextLine();
-
-            //If title is found, update metadata
-            if(currentLine.contains("Title:"))
-                metadata.setTitle(currentLine.substring(currentLine.indexOf(":")+2));
+     // #18: Validate the required header fields before storing the metadata (yaseen)
+    public boolean extractMetadata() {
+        String title = findLine("Title:");
+        String author = findLine("Author:");
+        String release = findLine("Release date:");
+        if (title == null || author == null || release == null) {
+            return false;
         }
 
-
-        //Extract Author
-        while(!currentLine.contains("Author:"))
-        {
-            currentLine = getNextLine();
-
-            //If Author is found, update metadata
-            if(currentLine.contains("Author:"))
-                metadata.setAuthor(currentLine.substring(currentLine.indexOf(":")+2));
+        int dateStart = release.indexOf(':') + 1;
+        int dateEnd = release.indexOf('[', dateStart);
+        int numberStart = release.indexOf('#', dateEnd);
+        int numberEnd = release.indexOf(']', numberStart);
+        if (dateEnd < 0 || numberStart < 0 || numberEnd < 0) {
+            return false;
         }
 
-        //Extract Release Date and ebook number
-        while(!currentLine.contains("Release date:"))
-        {
-            currentLine = getNextLine();
+        int bookNumber;
+        try {
+            bookNumber = Integer.parseInt(release.substring(numberStart + 1, numberEnd).strip());
+        } catch (NumberFormatException e) {
+            return false;
+        }
+        if (findLine("*** START OF THE PROJECT GUTENBERG EBOOK") == null) {
+            return false;
+        }
 
-            //If release date is found, update metadata
-            if(currentLine.contains("Release date:")){
-                int endOfDate = currentLine.indexOf("[") - 1;
-                metadata.setDate(currentLine.substring(currentLine.indexOf(":")+2, endOfDate));
+        metadata.setTitle(title.substring(title.indexOf(':') + 1).strip());
+        metadata.setAuthor(author.substring(author.indexOf(':') + 1).strip());
+        metadata.setDate(release.substring(dateStart, dateEnd).strip());
+        metadata.setBookNumber(bookNumber);
+        return true;
+    }
 
-                //since e-book number is on the same line, extract that too
-                String bookNumber = currentLine.substring(currentLine.indexOf("#")+1, currentLine.indexOf("]"));
-                metadata.setBookNumber(Integer.parseInt(bookNumber));
+    // #18: share the header search and return null if the marker is missing (yaseen)
+    private String findLine(String marker) {
+        String line;
+        while ((line = getNextLine()) != null) {
+            if (line.contains(marker)) {
+                return line;
             }
         }
-
-        //Since we've extracted all the metadata we need, we parse through and discard
-        //the rest of the header
-        while(!currentLine.contains("*** START OF THE PROJECT GUTENBERG EBOOK"))
-                currentLine = getNextLine();
-
-        return true;
+        return null;
     }
 
     /**
@@ -134,102 +131,44 @@ public class GutenbergIngestor {
         return metadata;
     }
 
-    /**
-     * Internal function that grabs the next sentence from the input file.
-     *
-     * Sentence grabbed will be put straight into sanitizedSentence field.
-     * @author Gabriel Goble (GGG220000)
-     * @DateWritten 10/16/2026
-     */
-    private void grabSentence(){
-        //Determining what is a valid sentence is an awful, evil, punishing task
-        //start by chunking into paragraphs
-
-        //a line is the start of a new paragraph if contains more than
-        //2 new lines in a row
-
-        if(currentParagraph.isBlank()) {
-            grabParagraph();
-        }
-
-        //Once we find a valid paragraph, pull a sentence
+    // #18: find the sentence boundary first, then extract the text once (yaseen)
+    private String grabSentence() {
         Matcher matcher = punctuationPattern.matcher(currentParagraph);
-
-        //if there is a sentence ending punctuation, extract
-        //the first sentence and remove it from the paragraph
-
-        StringBuilder sb = new StringBuilder();
-        int index;
-        do {
-            if(!matcher.find())
-                index = currentParagraph.length();
-            else
-                index = matcher.start() + 1;
-            sb.append(currentParagraph, 0, index);
+        int end = currentParagraph.length();
+        while (matcher.find()) {
+            int punctuation = matcher.start();
+            if (currentParagraph.charAt(punctuation) == '.' && isAbbreviation(punctuation + 1)) {
+                continue;
+            }
+            end = punctuation + 1;
+            break;
         }
-        while(isAbbreviation(index) && index < currentParagraph.length());
-        sanitizedSentence = sb.toString();
-        currentParagraph = currentParagraph.substring(index);
-
-        //System.out.println(sanitizedSentence);
+        String sentence = currentParagraph.substring(0, end);
+        currentParagraph = currentParagraph.substring(end);
+        return sentence;
     }
 
-    /**
-     * Internal function that grabs the next paragraph from the input file.
-     *
-     * Sentence grabbed will be put straight into currentParagraph field.
-     * @author Gabriel Goble (GGG220000)
-     * @DateWritten 10/20/2026
-     */
-    private void grabParagraph(){
-        StringBuilder paragraph = new StringBuilder();
-        //skip past all blank lines before the next paragraph
-        String line;
-        do {
-            line = getNextLine();
-            if (line == null) {
-                eof = true;
+    // #18: retain text collected before the footer or the physical end of the file (Yaseen)
+    private void grabParagraph() {
+        while (!eof) {
+            String line = getNextLine();
+            while (line != null && line.isBlank()) {
+                line = getNextLine();
+            }
+
+            StringBuilder paragraph = new StringBuilder();
+            while (line != null && !line.isBlank() && !line.contains(END_MARKER)) {
+                paragraph.append(' ').append(line);
+                line = getNextLine();
+            }
+            eof = line == null || line.contains(END_MARKER);
+            if (punctuationPattern.matcher(paragraph).find()) {
+                currentParagraph = paragraph.toString();
                 return;
             }
-        } while (line.isBlank());
-
-        //Read lines and add them to paragraph until we
-        //hit a paragraph break
-        do
-        {
-            paragraph.append(" ");
-            paragraph.append(line);
-            line = getNextLine();
-            if (line == null) {
-                eof = true;
-                return;
-            }
-        } while(!line.isBlank());
-
-        //store freshly read paragraph
-        currentParagraph = paragraph.toString();
-
-        //Check if we are at the end of document
-        if(currentParagraph.contains("*** END OF THE PROJECT GUTENBERG EBOOK")) {
-            eof = true;
-            currentParagraph = "";
-            return;
         }
-
-        //Once we find a valid paragraph, pull a sentence
-        Matcher matcher = punctuationPattern.matcher(currentParagraph);
-
-        //if there are no sentence ending punctuation, sentence
-        //is probably invalid
-        if(!matcher.find()) {
-            currentParagraph = "";
-            grabParagraph();
-            return;
-        }
-
-
+        currentParagraph = "";
     }
-
 
     /**
      * Helper function that takes the index of a period and checks if the word
@@ -254,44 +193,29 @@ public class GutenbergIngestor {
         return ABBREVIATIONS.contains(sb.toString().toLowerCase(Locale.ROOT));
     }
 
-    /**
-     * Returns the stored sanitized sentence and has the ingestor
-     * grab the next one from source file.
-     * @return Returns the current sentence without punctuation and with
-     * the punctuation normalized.
-     * @author Gabriel Goble (GGG220000)
-     * @DateWritten 10/16/2026
-     */
-    public String getSanitizedSentence(){
-        //If the end of file was reached and the final paragraph has
-        //already been parsed, output null
-        if(eof && currentParagraph.isBlank())
-            return null;
+    // #18: return the next usable sentence, including any text buffered at end of file (yaseen)
+    public String getSanitizedSentence() {
+        while (true) {
+            if (currentParagraph.isBlank()) {
+                grabParagraph();
+            }
+            if (currentParagraph.isBlank()) {
+                return null;
+            }
 
-        //store the current one temporarily
-        String temp = sanitizedSentence;
-
-        //loads the next sentence into sanitizedSentenceField
-        grabSentence();
-        sanitizeSentence();
-
-        //if the field was empty before, grab the sentence just loaded up.
-        if(temp.isBlank())
-            temp = getSanitizedSentence();
-
-        return temp;
+            String sentence = TextSanitizer.sanitize(grabSentence());
+            if (!sentence.isBlank()) {
+                return sentence;
+            }
+        }
     }
-    /**
-     * Takes the sentence currently in the buffer and sanitizes it for.
-     *
-     * New sentence will be put straight into sanitizedSentence field.
-     * @author Gabriel Goble (GGG220000)
-     * @DateWritten 10/20/2026
-     */
-    private void sanitizeSentence(){
-        if(eof)
-            return;
-        sanitizedSentence = TextSanitizer.sanitize(sanitizedSentence);
+
+    // #18: Release the file so JUnit can remove its temporary fixture (yaseen)
+    @Override
+    public void close() throws IOException {
+        if (bufferedReader != null) {
+            bufferedReader.close();
+        }
     }
 
     /**
@@ -312,7 +236,10 @@ public class GutenbergIngestor {
     public String getNextLine(){
         try {
             String line = bufferedReader.readLine();
-            bytesRead += line.length();
+            // #18: readLine() returns null at EOF, so count only lines that exist
+            if (line != null) {
+                bytesRead += line.length();
+            }
             return line;
         } catch (IOException e) {
             return null;
