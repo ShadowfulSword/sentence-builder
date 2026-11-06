@@ -1,0 +1,131 @@
+/* Oudom Pach OTP220001 10/20/26 */
+.root {
+    -fx-base: #101318;
+    -fx-background: #101318;
+    -fx-control-inner-background: #13171d;
+    -fx-font-family: "Segoe UI", "DM Sans", sans-serif;
+    -fx-font-size: 13px;
+    -fx-text-fill: #d5dbe5;
+}
+
+.header {
+    -fx-background-color: #171b22;
+    -fx-padding: 18px 30px;
+    -fx-border-color: transparent transparent #292e37 transparent;
+    -fx-border-width: 1px;
+}
+
+.brand {
+    -fx-font-size: 19px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #ffffff;
+}
+
+.eyebrow {
+    -fx-font-family: "Consolas", "Monospaced";
+    -fx-font-size: 10px;
+    -fx-text-fill: #889bd9;
+    -fx-font-weight: bold;
+}
+
+.title {
+    -fx-font-size: 22px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #e0e3ec;
+}
+
+.muted {
+    -fx-text-fill: #808b9d;
+    -fx-font-size: 11px;
+}
+
+.badge {
+    -fx-background-color: #223b33;
+    -fx-text-fill: #8cc6aa;
+    -fx-padding: 4px 8px;
+    -fx-background-radius: 4px;
+    -fx-font-size: 11px;
+}
+
+.panel {
+    -fx-background-color: #191e26;
+    -fx-border-color: #2d333d;
+    -fx-border-radius: 9px;
+    -fx-background-radius: 9px;
+    -fx-padding: 18px;
+}
+
+.panel-title {
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #d5dbe5;
+    -fx-padding: 0 0 8px 0;
+    -fx-border-color: transparent transparent #2c323c transparent;
+}
+
+.composition {
+    -fx-control-inner-background: #1b2029;
+    -fx-font-family: "Consolas", "Monospaced";
+    -fx-font-size: 15px;
+    -fx-text-fill: #e0e3ec;
+    -fx-border-color: #2d333d;
+    -fx-border-radius: 6px;
+}
+
+.button {
+    -fx-background-color: #222831;
+    -fx-border-color: #303640;
+    -fx-text-fill: #cbd3de;
+    -fx-background-radius: 6px;
+    -fx-border-radius: 6px;
+    -fx-padding: 8px 14px;
+    -fx-cursor: hand;
+}
+
+.button:hover {
+    -fx-background-color: #2c3440;
+}
+
+.button.primary {
+    -fx-background-color: #8fa5ff;
+    -fx-border-color: #8fa5ff;
+    -fx-text-fill: #151d39;
+    -fx-font-weight: bold;
+}
+
+.button.danger {
+    -fx-background-color: #302126;
+    -fx-border-color: #57353d;
+    -fx-text-fill: #d68d96;
+}
+
+.sentence-card {
+    -fx-background-color: #1e2530;
+    -fx-border-color: #303a49;
+    -fx-border-radius: 5px;
+    -fx-background-radius: 5px;
+    -fx-padding: 10px;
+}
+
+.metric {
+    -fx-font-size: 26px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #c1cded;
+}
+
+.unique {
+    -fx-text-fill: #8cc6aa;
+    -fx-font-weight: bold;
+}
+
+.duplicate {
+    -fx-text-fill: #d6b47b;
+    -fx-font-weight: bold;
+}
+
+.status-bar {
+    -fx-background-color: #161a20;
+    -fx-padding: 10px 30px;
+    -fx-text-fill: #69768a;
+    -fx-border-color: #282e37 transparent transparent transparent;
+}
