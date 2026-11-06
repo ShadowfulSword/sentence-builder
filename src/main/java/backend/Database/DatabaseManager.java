@@ -12,6 +12,7 @@
 
 
 package backend.Database;
+import javax.xml.transform.Result;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -282,6 +283,89 @@ public class DatabaseManager implements AutoCloseable {
             }
             //account for any leftover words in the remaining batch
             ps.executeBatch();
+        }
+    }
+
+    //word row, each word followed by its counts and the number of unique follows sorted alphabetically
+    public List<WordRow> getAllWords() throws SQLException{
+        List<WordRow> rows = new ArrayList<>();
+        //use left join to recieve words that are only ever at the end of the sentances and have them set to 0
+        String query = """
+                SELECT w.word, w.total_frequency, w.start_frequency, w.end_frequency, COUNT(t.next_word)
+                FROM words w LEFT JOIN transitions t ON t.word = w.word
+                GROUP BY w.word, w.total_frequency, w.start_frequency, w.end_frequency
+                ORDER BY w.word""";
+
+        try(Statement s = conn.createStatement()){
+            try(ResultSet rs = s.executeQuery(query)){
+                while(rs.next()){
+                    rows.add(new WordRow(rs.getString(1), rs.getInt(2), rs.getInt(3), rs.getInt(4), rs.getInt(5)));
+                }
+            }
+        }
+        return rows;
+    }
+
+    //get every word that follows the passed word in most frequent and alphabetical order
+    //empty list = no follows (end of sentances)
+    public List<FollowerRow> getFollowers(String word) throws SQLException{
+        List<FollowerRow> rows = new ArrayList<>();
+        String query = "SELECT next_word, frequency FROM transitions where word = ? ORDER BY frequency DESC, next_word ASC";
+        try(PreparedStatement ps = conn.prepareStatement(query)){
+            ps.setString(1, word);
+            try(ResultSet rs = ps.executeQuery()){
+                while(rs.next())
+                    rows.add(new FollowerRow(rs.getString(1), rs.getInt(2)));
+            }
+        }
+        return  rows;
+    }
+
+    //word count, transiton count and most frequent starting word
+    public CorpusStats getCorpusStats() throws SQLException{
+        String query = """
+                SELECT (SELECT COUNT(*) FROM words),
+                       (SELECT COUNT(*) FROM transitions),
+                       (SELECT word FROM words WHERE start_frequency > 0 ORDER BY start_frequency DESC, word ASC LIMIT 1)""";
+        try(Statement s = conn.createStatement()){
+            try(ResultSet rs = s.executeQuery(query)){
+                rs.next(); //get one row
+                return new CorpusStats(rs.getInt(1), rs.getInt(2), rs.getString(3));
+            }
+        }
+    }
+
+    //get every imported file ordered by newest recorded import date
+    public List<ImportedFileRow> getImportedFiles() throws SQLException{
+        List<ImportedFileRow> rows = new ArrayList<>();
+        String query = "SELECT filename, wordcount, import_date FROM imported_files ORDER BY import_date DESC";
+
+        try(Statement s = conn.createStatement()){
+            try(ResultSet rs = s.executeQuery(query)){
+                while (rs.next())
+                    rows.add(new ImportedFileRow(rs.getString(1), rs.getInt(2), rs.getTimestamp(3).toLocalDateTime()));
+            }
+        }
+        return rows;
+    }
+
+    //get one random word from the DB or null if the table has nothing in yet
+    public String getRandomWord() throws SQLException{
+        int totalRow = 0;
+        try(Statement s = conn.createStatement()){
+            ResultSet rs = s.executeQuery("SELECT COUNT(*) FROM words");
+            rs.next();
+            totalRow = rs.getInt(1);
+        }
+        if(totalRow == 0)
+            return null;
+
+        int rand = (int)(Math.random() * totalRow);
+        try(PreparedStatement ps = conn.prepareStatement("SELECT word FROM words ORDER BY word LIMIT  1 OFFSET ?")){
+            ps.setInt(1, rand);
+            try(ResultSet rs = ps.executeQuery()){
+                return  rs.next() ? rs.getString(1) : null;
+            }
         }
     }
 }
