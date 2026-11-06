@@ -1,16 +1,22 @@
 // Oudom Pach OTP220001 10/20/2026
+// Ayush Kafly axk220167 11/05/2026
 package frontend.views;
 
+import frontend.DbRunner;
 import frontend.UIFactory;
 import frontend.state.AppState;
 import frontend.state.AppState.CorpusItem;
 import frontend.state.AppState.LogItem;
 import frontend.state.AppState.WordItem;
+import javafx.collections.FXCollections;
 import javafx.collections.ListChangeListener;
+import javafx.collections.ObservableList;
 import javafx.collections.transformation.FilteredList;
 import javafx.scene.Node;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
+
+import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
 import java.util.Map;
 
@@ -23,9 +29,17 @@ public class ReportsView {
     // Holds the shared application state containing words, transitions, history, and imported files
     private final AppState state;
 
+    //runner object to call all DB transactions on a background thread to not freeze the app
+    private final DbRunner dbRunner;
+    //imported files at thte bottom table
+    private final ObservableList<CorpusItem> files = FXCollections.observableArrayList();
+    //formatter for imported time stamp
+    private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("MM d, yyyy hh:mm a");
+
     // Constructor receives the shared AppState so this tab stays synced with the rest of the UI
     public ReportsView(AppState state) {
         this.state = state;
+        this.dbRunner = new DbRunner(state);
     }
 
     // Builds and returns the complete JavaFX layout for the Reports & Duplicate Audit tab
@@ -36,25 +50,15 @@ public class ReportsView {
         Label frequent = UIFactory.label("", "metric");
         Label duplicateRate = UIFactory.label("", "metric");
 
-        // Calculates and updates the 4 KPI card values based on the current AppState data
+        // Calculate and update the duplicate rate
         Runnable updateMetrics = () -> {
-            // 1. Total number of unique words in the vocabulary
-            vocabulary.setText("" + state.getWords().size());
-            // 2. Total number of unique word-to-word (bi-gram) transitions
-            bigrams.setText("" + state.getTransitions().values().stream().mapToInt(Map::size).sum());
-            // 3. The word with the highest sentence-start count (or "—" if empty)
-            frequent.setText(state.getWords().stream()
-                    .max(Comparator.comparingInt(WordItem::starts))
-                    .map(WordItem::text).orElse("—"));
-            // 4. Percentage of generated sentences that are duplicates of earlier sentences
-            long unique = state.getHistory().stream().map(LogItem::sentence).distinct().count();
-            int totalHistory = state.getHistory().size();
-            duplicateRate.setText(String.format("%.1f%%", totalHistory == 0 ? 0 : 100.0 * (totalHistory - unique) / totalHistory));
+           long unique = state.getHistory().stream().map(LogItem::sentence).distinct().count();
+           int hist = state.getHistory().size();
+           duplicateRate.setText(String.format("%,1f%%", hist == 0 ? 0 : 100.00 * (hist - unique) / hist));
         };
         updateMetrics.run(); // Calculate initial KPI values on startup
 
-        // Automatically recalculate KPI metrics whenever words or generated sentences are added/removed
-        state.getWords().addListener((ListChangeListener<WordItem>) c -> updateMetrics.run());
+        // Re calculate the dupe rate when generated sentances get added
         state.getHistory().addListener((ListChangeListener<LogItem>) c -> updateMetrics.run());
 
         // Create a horizontal row holding the 4 KPI summary panels side-by-side
@@ -130,6 +134,8 @@ public class ReportsView {
         UIFactory.column(files, "Import timestamp", CorpusItem::time);
         files.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
         files.setPrefHeight(140);
+
+
 
         // Stack the KPI cards, sentence history panel, and imported files panel vertically
         VBox content = new VBox(18, kpis, logs, UIFactory.panel("Imported corpus files", files));

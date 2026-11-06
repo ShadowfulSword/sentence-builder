@@ -4,6 +4,7 @@ package frontend.views;
 import backend.Database.DatabaseConfig;
 import backend.Database.DatabaseManager;
 import backend.Database.FollowerRow;
+import frontend.DbRunner;
 import frontend.UIFactory;
 import frontend.state.AppState;
 import frontend.state.AppState.TransitionItem;
@@ -29,9 +30,13 @@ public class VocabularyView {
     // Holds the shared application state containing words, transitions, and status text
     private final AppState state;
 
+    //runner object to call all DB transactions on a background thread to not freeze the app
+    private final DbRunner dbRunner;
+
     // Constructor receives the shared AppState so this tab stays synced with the rest of the UI
     public VocabularyView(AppState state) {
         this.state = state;
+        this.dbRunner = new DbRunner(state);
     }
 
     //words shown in the table from the SQL table and only held in this tab
@@ -89,7 +94,7 @@ public class VocabularyView {
 
         Runnable loadWords = () -> {
             state.setStatus("Loading vocab from MySQL Database...");
-            runDb(DatabaseManager::getAllWords, rows -> {
+            dbRunner.rundb(DatabaseManager::getAllWords, rows -> {
                 words.setAll(rows.stream().map(r-> new WordItem(r.word(), r.total(), r.start(), r.end(), r.follows())).toList());
                 state.setStatus("Loaded " + rows.size() + " words from the Database");
             }, "Could not connect to Database: ");
@@ -127,7 +132,7 @@ public class VocabularyView {
            //ask MySQL for the words that folloed this one and get their probabiliteis
             String word = w.text();
             pairs.getItems().clear();
-            runDb(db -> db.getFollowers(word), followers -> {
+            dbRunner.rundb(db -> db.getFollowers(word), followers -> {
                 //the user may have clicked another word while this query ran, drop stale ansers
                 WordItem curr = table.getSelectionModel().getSelectedItem();
                 if(curr != null && curr.text().equals(word))
@@ -161,7 +166,7 @@ public class VocabularyView {
             // If user clicks OK, remove the word and all of its follow-word transitions
             //delete in mysql then reload the table
             if (confirm.showAndWait().orElse(ButtonType.CANCEL) == ButtonType.OK) {
-                runDb(db -> db.removeWord(w.text()), removed -> {
+                dbRunner.rundb(db -> db.removeWord(w.text()), removed -> {
                     selected.setText("Select a word");
                     pairs.getItems().clear();
                     state.setStatus(removed ? "Deleted \"" + w.text() + "\" from the Database" : "\"" + w.text() + "\" was already gone");
@@ -192,41 +197,6 @@ public class VocabularyView {
                 split);
     }
 
-    //a db call that is handed an openmanager and sends result back
-    @FunctionalInterface
-    private interface DbQuery<T>{
-        T run(DatabaseManager db) throws Exception;
-    }
-
-    //get th eoriginal eception so the status can show where fail happned
-    //mneeded it for debug
-    private static String rootMessage(Throwable t){
-        while(t.getCause() != null)
-            t = t.getCause();
-        return t.getMessage();
-    }
-    //Run the query in a background thread to not freeze the window (so we can keep showing things like progress bar)
-    //Then bring it back to the JavaFX thread.
-    //return result or error based on success
-    //All calls must pass through her so threads and error handeling is centeralized
-    //making use of standard javafx transaction template
-    private <T> void runDb(DbQuery<T> query, Consumer<T> onSuccess, String err){
-        Task<T> task = new Task<T>(){
-            @Override
-            protected T call() throws Exception{ //run this on a background thread
-                try(DatabaseManager db = DatabaseConfig.open()){
-                    return query.run(db);
-                }
-            }
-        };
-        //tjese are on the JavaFx thread and are allowed to touch the UI withpout freeze
-        task.setOnSucceeded(e -> onSuccess.accept(task.getValue()));
-        task.setOnFailed(e-> state.setStatus(err + rootMessage(task.getException())));
-
-        Thread thread = new Thread(task);
-        thread.setDaemon(true); //set config to let app close even on leftover query
-        thread.start();
-    }
 
     //fill in the follow table and work out each word's prob based on frequency
     //we can change this if we want it to do it based on algorithm
@@ -238,7 +208,7 @@ public class VocabularyView {
 
     //Write the new update counts to mySQL then updates the tabel once MySQL confirms change
     private void saveCount(WordItem word, int total, int start, int end){
-        runDb(db -> db.updateWordFrequencies(word.text(), total, start, end), saved -> {
+        dbRunner.rundb(db -> db.updateWordFrequencies(word.text(), total, start, end), saved -> {
             if(!saved){
                 state.setStatus("\"" + word.text() + "\" is no longer in the database. Please reload and try again");
                 return;
