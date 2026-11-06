@@ -285,4 +285,32 @@ public class DatabaseManager implements AutoCloseable {
         }
         return  rows;
     }
+
+    //word count, transiton count and most frequent starting word
+    public CorpusStats getCorpusStats() throws SQLException{
+        String query = """
+                SELECT (SELECT COUNT(*) FROM words),
+                       (SELECT COUNT(*) FROM transitions),
+                       (SELECT word FROM words WHERE start_frequency > 0 ORDER BY start_frequency DESC, word ASC LIMIT 1)""";
+        try(Statement s = conn.createStatement()){
+            try(ResultSet rs = s.executeQuery(query)){
+                rs.next(); //get one row
+                return new CorpusStats(rs.getInt(1), rs.getInt(2), rs.getString(3));
+            }
+        }
+    }
+
+    //get every imported file ordered by newest recorded import date
+    public List<ImportedFileRow> getImportedFiles() throws SQLException{
+        List<ImportedFileRow> rows = new ArrayList<>();
+        String query = "SELECT filename, wordcount, import_date FROM imported_files ORDER BY import_date DESC";
+
+        try(Statement s = conn.createStatement()){
+            try(ResultSet rs = s.executeQuery(query)){
+                while (rs.next())
+                    rows.add(new ImportedFileRow(rs.getString(1), rs.getInt(2), rs.getTimestamp(3).toLocalDateTime()));
+            }
+        }
+        return rows;
+    }
 }

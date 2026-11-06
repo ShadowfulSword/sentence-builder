@@ -2,6 +2,7 @@
 // Ayush Kafly axk220167 11/05/2026
 package frontend.views;
 
+import backend.Database.DatabaseManager;
 import frontend.DbRunner;
 import frontend.UIFactory;
 import frontend.state.AppState;
@@ -34,7 +35,7 @@ public class ReportsView {
     //imported files at thte bottom table
     private final ObservableList<CorpusItem> files = FXCollections.observableArrayList();
     //formatter for imported time stamp
-    private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("MM d, yyyy hh:mm a");
+    private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("MMM d, yyyy h:mm a");
 
     // Constructor receives the shared AppState so this tab stays synced with the rest of the UI
     public ReportsView(AppState state) {
@@ -54,7 +55,7 @@ public class ReportsView {
         Runnable updateMetrics = () -> {
            long unique = state.getHistory().stream().map(LogItem::sentence).distinct().count();
            int hist = state.getHistory().size();
-           duplicateRate.setText(String.format("%,1f%%", hist == 0 ? 0 : 100.00 * (hist - unique) / hist));
+           duplicateRate.setText(String.format("%.1f%%", hist == 0 ? 0 : 100.00 * (hist - unique) / hist));
         };
         updateMetrics.run(); // Calculate initial KPI values on startup
 
@@ -128,18 +129,36 @@ public class ReportsView {
         VBox.setVgrow(log, Priority.ALWAYS);
 
         // Bottom table displaying all imported .txt corpus files, word counts, and timestamps
-        TableView<CorpusItem> files = new TableView<>(state.getCorpora());
-        UIFactory.column(files, "Imported Project Gutenberg / .txt file", CorpusItem::file);
-        UIFactory.column(files, "Words contributed", CorpusItem::count);
-        UIFactory.column(files, "Import timestamp", CorpusItem::time);
-        files.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
-        files.setPrefHeight(140);
+        TableView<CorpusItem> filesTable = new TableView<>(files);
+        UIFactory.column(filesTable, "Imported Project Gutenberg / .txt file", CorpusItem::file);
+        UIFactory.column(filesTable, "Words contributed", CorpusItem::count);
+        UIFactory.column(filesTable, "Import timestamp", CorpusItem::time);
+        filesTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
+        filesTable.setPrefHeight(140);
 
+        //load the 3 top fields and the bottom tables
+        Runnable loadReport = () -> {
+          state.setStatus("Loading report from the DB...");
+          dbRunner.rundb(DatabaseManager::getCorpusStats, stats -> {
+              vocabulary.setText(String.valueOf(stats.words()));
+              bigrams.setText(String.valueOf(stats.transitions()));
+              frequent.setText(stats.topStartWord() == null ? "N/A" : stats.topStartWord());
+          }, "Could not load the stats: ");
 
+          dbRunner.rundb(DatabaseManager::getImportedFiles, rows -> {
+              files.setAll(rows.stream().map(r -> new CorpusItem(r.filename(), String.valueOf(r.wordCount()), r.importDate().format(TIME_FORMAT))).toList());
+          }, "Could not load imported files table: ");
+        };
+
+        //refresh the report after updates to the DB elsewehere
+        Button refresh = UIFactory.button("Refresh from DB", "", loadReport);
 
         // Stack the KPI cards, sentence history panel, and imported files panel vertically
-        VBox content = new VBox(18, kpis, logs, UIFactory.panel("Imported corpus files", files));
+        VBox content = new VBox(18, kpis, logs, UIFactory.panel("Imported corpus files", refresh, filesTable));
         VBox.setVgrow(logs, Priority.ALWAYS);
+
+        //fill the report on build
+        loadReport.run();
 
         // Wrap the content in the standard page header layout and return it
         return UIFactory.page(
