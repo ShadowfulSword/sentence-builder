@@ -27,8 +27,8 @@ import java.util.Random;
 //markov chain sentence generator that picks each word by its percentage
 public class ProbabilisticGenerator {
     public static final String END = "";
-    private static final Random random = new Random();
-    private DatabaseManager db = null;
+    protected static final Random random = new Random();
+    protected DatabaseManager db = null;
 
     public ProbabilisticGenerator() {
         try { //replace with your password
@@ -53,7 +53,7 @@ public class ProbabilisticGenerator {
         if(db == null)
             return null;
         //get the list of possible next words
-        ArrayList<TransitionData> transitions =  db.getTransitions(currentWord.getWord());
+        ArrayList<TransitionData> transitions =  getTransitions(currentWord);
 
         //get a random number that will be associated with a specific word
         int randomWord = random.nextInt(currentWord.getTotalFrequency());
@@ -73,6 +73,12 @@ public class ProbabilisticGenerator {
         return nextWord;
     }
 
+    protected ArrayList<TransitionData> getTransitions(WordData currentWord)
+    {
+        return db.getTransitions(currentWord.getWord());
+    }
+
+
     /**
      * Generates a sentence of length sentenceLength + 1 starting with your seed word.
      * @param seedWord Word you want the sentence to start with
@@ -84,7 +90,7 @@ public class ProbabilisticGenerator {
     {
         if(db == null)
             return null;
-        
+
         StringBuilder sentence = new StringBuilder();
 
         String currentWord = seedWord;
