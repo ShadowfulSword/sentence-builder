@@ -4,7 +4,6 @@ package frontend.state;
 import backend.Database.DatabaseManager;
 import backend.Database.TransitionData;
 import backend.Database.WordData;
-import backend.Token;
 import frontend.UIFactory;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
@@ -13,6 +12,7 @@ import javafx.collections.ObservableList;
 
 import java.sql.SQLException;
 import java.util.*;
+import backend.Ingestion.Token;
 
 /*
 Observer Method Pattern:
@@ -82,8 +82,8 @@ public class AppState {
     // Hydrates the AppState directly from MySQL tables (words, transitions, imported_files)
     public void loadFromDatabase(DatabaseManager db) throws SQLException {
         this.databaseManager = db;
-        List<DatabaseManager.ImportedFileRecord> files = db.getImportedFiles();
-        List<WordData> dbWords = db.getAllWords();
+        List<DatabaseManager.ImportedFileRecord> files = db.getImportedFileRecords();
+        List<WordData> dbWords = db.getAllWordData();
         List<TransitionData> dbTransitions = db.getAllTransitions();
 
         if (dbWords.isEmpty() && files.isEmpty()) {

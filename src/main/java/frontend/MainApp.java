@@ -1,13 +1,13 @@
 // Oudom Pach OTP220001 10/16/2026 Initial Creation: Root application container and JavaFX stage
 package frontend;
 
-import backend.CorpusTokenizer;
 import backend.Database.DatabaseManager;
 import backend.Database.TransitionData;
 import backend.Database.WordData;
-import backend.DocumentMetadata;
-import backend.GutenbergIngestor;
-import backend.Token;
+import backend.Ingestion.CorpusTokenizer;
+import backend.Ingestion.DocumentMetadata;
+import backend.Ingestion.GutenbergIngestor;
+import backend.Ingestion.Token;
 import frontend.state.AppState;
 import frontend.state.AppState.CorpusItem;
 import frontend.views.EditorView;
@@ -22,6 +22,7 @@ import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
+
 
 import java.io.File;
 import java.io.IOException;

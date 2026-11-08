@@ -1,6 +1,9 @@
 // Oudom Pach OTP220001 10/20/2026 Initial Creation: Composition text editor and sentence generator tab
+// Ayush Kafley axk220167 11/05/2026 Revised: Integrated DbRunner for database-driven random word selection
 package frontend.views;
 
+import backend.Database.DatabaseManager;
+import frontend.DbRunner;
 import frontend.UIFactory;
 import frontend.state.AppState;
 import frontend.state.AppState.LogItem;
@@ -20,9 +23,12 @@ public class EditorView {
     private final AppState state;
     private final TextArea editor = new TextArea();
     private final Random random = new Random();
+    //runner object to call all DB transactions on a background thread to not freeze the app
+    private final DbRunner dbRunner;
 
     public EditorView(AppState state) {
         this.state = state;
+        this.dbRunner = new DbRunner(state);
     }
 
     public Node build() {
@@ -121,7 +127,15 @@ public class EditorView {
         TextField starting = new TextField(formattedStart);
         starting.setPromptText("Starting word");
         Button randomWord = UIFactory.button("Random Word", "", () -> {
-            if (!state.getWords().isEmpty()) {
+            if (state.isDatabaseConnected()) {
+                dbRunner.rundb(DatabaseManager::getRandomWord, word -> {
+                    if (word == null) {
+                        state.setStatus("No words in the DB yet, import text first.");
+                    } else {
+                        starting.setText(Character.toUpperCase(word.charAt(0)) + word.substring(1));
+                    }
+                }, "Could not get random word from DB: ");
+            } else if (!state.getWords().isEmpty()) {
                 String picked = state.getWords().get(random.nextInt(state.getWords().size())).text();
                 starting.setText(Character.toUpperCase(picked.charAt(0)) + picked.substring(1));
             }

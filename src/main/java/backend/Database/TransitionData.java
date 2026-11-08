@@ -28,6 +28,7 @@ public class TransitionData {
 
     public void addFrequency(){frequency++;} //always increment beacuse method will only  be called on needed update
 
+    public void setFrequency(int frequency){this.frequency = frequency;} //added so temperature algorithm can change weight
     //getter methods
     public String getWord(){return word;}
     public String getNextWord(){return nextWord;}

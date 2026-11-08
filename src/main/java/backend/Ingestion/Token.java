@@ -7,7 +7,7 @@
  * starting October 16, 2026
  */
 
-package backend;
+package backend.Ingestion;
 public class Token {
     String word;
     boolean isStart;
