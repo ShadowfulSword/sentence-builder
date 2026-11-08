@@ -30,6 +30,7 @@ public class WordData {
             endFrequency++;
     }
     // Oudom Pach OTP220001 11/3/2026 Revised: Added 4-argument constructor with full frequencies for database hydration
+    // Oudom Pach OTP220001 11/08/26 Revised: Preserved 4-argument constructor and deduplicated during merge
     public WordData(String word, int totalFrequency, int startFrequency, int endFrequency){
         this.word = word;
         this.totalFrequency = totalFrequency;

@@ -96,6 +96,7 @@ public class VocabularyView {
             FXCollections.sort(words, c);
         });
 
+        // Oudom Pach OTP220001 11/08/26 Revised: Reconciled vocabulary loader to fetch from MySQL via DbRunner when connected or fallback to in-memory state
         Runnable loadWords = () -> {
             if (state.isDatabaseConnected()) {
                 state.setStatus("Loading vocab from MySQL Database...");
@@ -130,6 +131,7 @@ public class VocabularyView {
         pairs.setPrefHeight(230);
 
         // Listener that triggers whenever the user clicks a word row in the left table
+        // Oudom Pach OTP220001 11/08/26 Revised: Integrated DbRunner follower query with fallback to in-memory transitions map
         table.getSelectionModel().selectedItemProperty().addListener((o, a, w) -> {
             if (w == null) return;
             // Populate the text fields with the selected word's current stats
@@ -160,6 +162,7 @@ public class VocabularyView {
             }
         });
 
+        // Oudom Pach OTP220001 11/08/26 Revised: Combined DbRunner update persistence with bidirectional AppState synchronization
         // Button to validate and save manual edits made to a word's counts
         Button save = UIFactory.button("Save Changes to Database", "primary", () -> {
             WordItem w = table.getSelectionModel().getSelectedItem();
@@ -186,6 +189,7 @@ public class VocabularyView {
             }
         });
 
+        // Oudom Pach OTP220001 11/08/26 Revised: Combined DbRunner word removal with local model purge and in-memory transition cleanup
         // Button to delete the selected word after asking for confirmation
         Button delete = UIFactory.button("Delete Word from DB", "danger", () -> {
             WordItem w = table.getSelectionModel().getSelectedItem();

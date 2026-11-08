@@ -79,6 +79,7 @@ public class AppState {
     public void setDatabaseManager(DatabaseManager databaseManager) { this.databaseManager = databaseManager; }
     public boolean isDatabaseConnected() { return databaseManager != null; }
 
+    // Oudom Pach OTP220001 11/08/26 Revised: Hydrates in-memory state using getImportedFileRecords and getAllWordData to coexist with PR #70 query records
     // Hydrates the AppState directly from MySQL tables (words, transitions, imported_files)
     public void loadFromDatabase(DatabaseManager db) throws SQLException {
         this.databaseManager = db;

@@ -20,6 +20,7 @@ public class TransitionData {
         this.nextWord = nextWord;
     }
     // Oudom Pach OTP220001 11/3/2026 Revised: Added 3-argument constructor with frequency count for database hydration
+    // Oudom Pach OTP220001 11/08/26 Revised: Preserved 3-argument constructor and deduplicated during merge
     public TransitionData(String word, String nextWord, int frequency){
         this.word = word;
         this.nextWord = nextWord;

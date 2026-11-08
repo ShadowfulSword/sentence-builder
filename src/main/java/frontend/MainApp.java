@@ -155,6 +155,7 @@ public class MainApp extends Application {
             importing.setText("Opening: " + selected.getName());
             parsed.setText("Starting background ingestion...");
 
+            // Oudom Pach OTP220001 11/08/26 Revised: Preserved JavaFX Task async ingestion with live byte progress, duplicate validation, and MySQL batch persistence over timeline polling
             // Background worker task to avoid freezing the JavaFX UI
             Task<IngestionResult> task = new Task<>() {
                 @Override

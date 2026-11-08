@@ -126,6 +126,7 @@ public class EditorView {
 
         TextField starting = new TextField(formattedStart);
         starting.setPromptText("Starting word");
+        // Oudom Pach OTP220001 11/08/26 Revised: Combined DbRunner database random word lookup with in-memory fallback for offline resilience
         Button randomWord = UIFactory.button("Random Word", "", () -> {
             if (state.isDatabaseConnected()) {
                 dbRunner.rundb(DatabaseManager::getRandomWord, word -> {

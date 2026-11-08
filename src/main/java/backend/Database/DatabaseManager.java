@@ -25,6 +25,7 @@ public class DatabaseManager implements AutoCloseable {
     public static final String DB_URL = "jdbc:mysql://localhost:3306/sentence_builder?rewriteBatchedStatements=true"; //past the ? allows the DB to rewrite the batch calls together rather than as individual transactions when passed through
 
     // Oudom Pach OTP220001 11/3/2026 Revised: Added default connection constants, ImportedFileRecord, and createDefault factory method
+    // Oudom Pach OTP220001 11/08/26 Revised: Reconciled DEFAULT_URL with DB_URL and preserved environment-variable fallback factory
     public static final String DEFAULT_URL = DB_URL;
     public static final String DEFAULT_USER = "root";
     public static final String DEFAULT_PASSWORD = "";
@@ -305,6 +306,7 @@ public class DatabaseManager implements AutoCloseable {
         }
     }
     // Oudom Pach OTP220001 11/3/2026 Revised: Added getAllWordData, getAllTransitions, getTransitionsForWord, and getImportedFileRecords
+    // Oudom Pach OTP220001 11/08/26 Revised: Reconciled ingestion retrieval methods (getAllWordData, getImportedFileRecords) to coexist with PR #70 on-demand UI queries
     // Retrieve all words stored in the words table as WordData objects
     public List<WordData> getAllWordData() throws SQLException {
         List<WordData> words = new ArrayList<>();
