@@ -39,7 +39,7 @@ public class CorpusRepository{
         Map<String, TransitionData> transitions = new HashMap<>();
 
         long dbStart = System.nanoTime();
-        try (DatabaseManager db = new DatabaseManager(DB_URL, "root", "")) { //replace with your password
+        try (DatabaseManager db = new DatabaseManager(DB_URL, "root2", "password")) { //replace with your password
             //don't import the file if it is already in the DB
             if (db.hasImportedFile(metadata.getTitle())) {
                 System.out.println("File " + metadata.getTitle() + " already imported to DB");

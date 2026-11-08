@@ -32,12 +32,20 @@ public class ProbabilisticGenerator {
 
     public ProbabilisticGenerator() {
         try { //replace with your password
-            this.db = new DatabaseManager(DatabaseManager.DB_URL, "root", "");
+            this.db = new DatabaseManager(DatabaseManager.DB_URL, "root2", "password");
         }
         catch (SQLException e)
         {
             throw new RuntimeException(e);
         }
+    }
+
+    public static void main(String [] args){
+            TemperatureGenerator generator = new TemperatureGenerator();
+            generator.setTemperature(1.5f);
+            String seedword = "the";
+
+            System.out.println(generator.generateSentence(seedword, 1));
     }
 
     /**

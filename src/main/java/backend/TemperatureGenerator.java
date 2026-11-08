@@ -31,7 +31,7 @@ public class TemperatureGenerator extends ProbabilisticGenerator{
     }
 
     @Override
-    protected ArrayList<TransitionData> getTransitions(WordData currentWord)
+    protected ArrayList<TransitionData> getTransitions(WordData currentWord )
     {
         ArrayList<TransitionData> transitions =  db.getTransitions(currentWord.getWord());
 
@@ -44,13 +44,48 @@ public class TemperatureGenerator extends ProbabilisticGenerator{
 
         float invertedTemperature = 1f/max(temperature, 1e-5f);
 
+        long frequencySum = 0;
         for(int i = 0; i < transitions.size(); i++)
         {
-            transitions.get(i).setFrequency((int)pow(((float)transitions.get(i).getFrequency()/currentWord.getTotalFrequency()), invertedTemperature)*currentWord.getTotalFrequency());
+            int newFrequency = (int)(pow(((float)transitions.get(i).getFrequency()/currentWord.getTotalFrequency()), invertedTemperature)* currentWord.getTotalFrequency());
+            transitions.get(i).setFrequency(newFrequency);
+            frequencySum += newFrequency;
         }
 
         return transitions;
+    }
 
+    @Override
+    public String getRandomNextWord(WordData currentWord)
+    {
+        if(db == null)
+            return null;
+        //get the list of possible next words
+        ArrayList<TransitionData> transitions =  getTransitions(currentWord);
+
+        int totalFrequency = 0;
+
+        for(TransitionData transition : transitions)
+            totalFrequency += transition.getFrequency();
+
+
+
+        //get a random number that will be associated with a specific word
+        int randomWord = random.nextInt(totalFrequency);
+        String nextWord = "";
+
+        //until our random number is reduced to zero, repeatedly subtract word weights
+        //from it, this ensures the probability a word is selected is proportional on its weight
+        for(TransitionData data : transitions) {
+            nextWord = data.getNextWord();
+            randomWord -= data.getFrequency();
+            if(randomWord <= 0) {
+                break;
+            }
+        }
+
+        //return the word
+        return nextWord;
     }
 
     public void setTemperature(float temperature) {
