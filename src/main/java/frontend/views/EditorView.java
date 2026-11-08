@@ -1,6 +1,9 @@
 // Oudom Pach OTP220001 10/20/2026
+//Ayush Kafley axk220167 11/5/2026
 package frontend.views;
 
+import backend.Database.DatabaseManager;
+import frontend.DbRunner;
 import frontend.UIFactory;
 import frontend.state.AppState;
 import frontend.state.AppState.LogItem;
@@ -20,9 +23,12 @@ public class EditorView {
     private final AppState state;
     private final TextArea editor = new TextArea("It is a truth universally acknowledged that a single man ");
     private final Random random = new Random();
+    //runner object to call all DB transactions on a background thread to not freeze the app
+    private final DbRunner dbRunner;
 
     public EditorView(AppState state) {
         this.state = state;
+        this.dbRunner = new DbRunner(state);
     }
 
     public Node build() {
@@ -79,9 +85,12 @@ public class EditorView {
         TextField starting = new TextField("It");
         starting.setPromptText("Starting word");
         Button randomWord = UIFactory.button("Random Word", "", () -> {
-            if (!state.getWords().isEmpty()) {
-                starting.setText(state.getWords().get(random.nextInt(state.getWords().size())).text());
-            }
+            dbRunner.rundb(DatabaseManager::getRandomWord, word -> {
+                if(word == null)
+                    state.setStatus("No words in the DB yet, import text first.");
+                else
+                    starting.setText(word);
+            }, "Could not get random word from DB: ");
         });
 
         //builds right side of tab 1
