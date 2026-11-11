@@ -202,10 +202,6 @@ public class VocabularyView {
                     dbRunner.rundb(db -> db.removeWord(w.text()), removed -> {
                         selected.setText("Select a word");
                         pairs.getItems().clear();
-                        words.remove(w);
-                        state.getWords().remove(w);
-                        state.getTransitions().remove(w.text());
-                        state.getTransitions().values().forEach(m -> m.remove(w.text()));
                         state.setStatus(removed ? "Deleted \"" + w.text() + "\" from the Database" : "\"" + w.text() + "\" was already gone");
                         loadWords.run();
                     }, "Couldn't delete from Database: ");
