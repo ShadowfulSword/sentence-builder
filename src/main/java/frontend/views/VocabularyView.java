@@ -1,4 +1,5 @@
-// Oudom Pach OTP220001 10/20/2026
+// Oudom Pach OTP220001 10/20/2026 Initial Creation: Vocabulary and database explorer tab
+// Ayush Kafley axk220167 11/05/2026 Revised: Connected VocabularyView to DatabaseManager via DbRunner
 package frontend.views;
 
 import backend.Database.DatabaseConfig;
@@ -16,8 +17,11 @@ import javafx.concurrent.Task;
 import javafx.scene.Node;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
+
+import java.sql.SQLException;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 
 
@@ -92,12 +96,17 @@ public class VocabularyView {
             FXCollections.sort(words, c);
         });
 
+        // Oudom Pach OTP220001 11/08/26 Revised: Reconciled vocabulary loader to fetch from MySQL via DbRunner when connected or fallback to in-memory state
         Runnable loadWords = () -> {
-            state.setStatus("Loading vocab from MySQL Database...");
-            dbRunner.rundb(DatabaseManager::getAllWords, rows -> {
-                words.setAll(rows.stream().map(r-> new WordItem(r.word(), r.total(), r.start(), r.end(), r.follows())).toList());
-                state.setStatus("Loaded " + rows.size() + " words from the Database");
-            }, "Could not connect to Database: ");
+            if (state.isDatabaseConnected()) {
+                state.setStatus("Loading vocab from MySQL Database...");
+                dbRunner.rundb(DatabaseManager::getAllWords, rows -> {
+                    words.setAll(rows.stream().map(r -> new WordItem(r.word(), r.total(), r.start(), r.end(), r.follows())).toList());
+                    state.setStatus("Loaded " + rows.size() + " words from the Database");
+                }, "Could not connect to Database: ");
+            } else {
+                words.setAll(state.getWords());
+            }
         };
 
         // Assemble the left panel containing the filter bar, sort dropdown, and vocabulary table
@@ -122,24 +131,38 @@ public class VocabularyView {
         pairs.setPrefHeight(230);
 
         // Listener that triggers whenever the user clicks a word row in the left table
+        // Oudom Pach OTP220001 11/08/26 Revised: Integrated DbRunner follower query with fallback to in-memory transitions map
         table.getSelectionModel().selectedItemProperty().addListener((o, a, w) -> {
             if (w == null) return;
             // Populate the text fields with the selected word's current stats
-            selected.setText(w.text());
+            selected.setText("Editing: " + w.text());
             total.setText("" + w.total());
             starts.setText("" + w.starts());
             ends.setText("" + w.ends());
-           //ask MySQL for the words that folloed this one and get their probabiliteis
+
             String word = w.text();
             pairs.getItems().clear();
-            dbRunner.rundb(db -> db.getFollowers(word), followers -> {
-                //the user may have clicked another word while this query ran, drop stale ansers
-                WordItem curr = table.getSelectionModel().getSelectedItem();
-                if(curr != null && curr.text().equals(word))
-                    showFollowers(pairs, followers);
-            }, "Could not load follow words: ");
+            if (state.isDatabaseConnected()) {
+                dbRunner.rundb(db -> db.getFollowers(word), followers -> {
+                    // the user may have clicked another word while this query ran, drop stale answers
+                    WordItem curr = table.getSelectionModel().getSelectedItem();
+                    if (curr != null && curr.text().equals(word))
+                        showFollowers(pairs, followers);
+                }, "Could not load follow words: ");
+            } else {
+                Map<String, Integer> nextWords = state.getTransitions().get(word);
+                if (nextWords != null) {
+                    int sum = nextWords.values().stream().mapToInt(Integer::intValue).sum();
+                    nextWords.entrySet().stream()
+                            .sorted(Map.Entry.<String, Integer>comparingByValue().reversed())
+                            .forEach(entry -> pairs.getItems().add(new TransitionItem(
+                                    entry.getKey(), entry.getValue(),
+                                    String.format("%.1f%%", 100.0 * entry.getValue() / Math.max(1, sum)))));
+                }
+            }
         });
 
+        // Oudom Pach OTP220001 11/08/26 Revised: Combined DbRunner update persistence with bidirectional AppState synchronization
         // Button to validate and save manual edits made to a word's counts
         Button save = UIFactory.button("Save Changes to Database", "primary", () -> {
             WordItem w = table.getSelectionModel().getSelectedItem();
@@ -150,28 +173,47 @@ public class VocabularyView {
                 int s = Integer.parseInt(starts.getText());
                 int e = Integer.parseInt(ends.getText());
                 if (t < 0 || s < 0 || e < 0 || s > t || e > t) throw new IllegalArgumentException();
-                // Write the new counts to the DB: the table row is updated once SQL confirms that the update transaction happened
-                saveCount(w, t, s, e);
+
+                if (state.isDatabaseConnected()) {
+                    saveCount(w, t, s, e);
+                } else {
+                    WordItem updated = new WordItem(w.text(), t, s, e, w.follows());
+                    int index = words.indexOf(w);
+                    if (index >= 0) words.set(index, updated);
+                    int stateIndex = state.getWords().indexOf(w);
+                    if (stateIndex >= 0) state.getWords().set(stateIndex, updated);
+                    state.setStatus("Word counts saved in memory; no database connected");
+                }
             } catch (IllegalArgumentException ex) {
                 state.setStatus("Enter nonnegative counts; start and end counts cannot exceed total.");
             }
         });
 
+        // Oudom Pach OTP220001 11/08/26 Revised: Combined DbRunner word removal with local model purge and in-memory transition cleanup
         // Button to delete the selected word after asking for confirmation
         Button delete = UIFactory.button("Delete Word from DB", "danger", () -> {
             WordItem w = table.getSelectionModel().getSelectedItem();
             if (w == null) return;
             Alert confirm = new Alert(Alert.AlertType.CONFIRMATION,
-                    "Delete \"" + w.text() + "\" from the Database?", ButtonType.CANCEL, ButtonType.OK);
-            // If user clicks OK, remove the word and all of its follow-word transitions
-            //delete in mysql then reload the table
+                    "Delete \"" + w.text() + "\" from " + (state.isDatabaseConnected() ? "the Database?" : "the local model?"),
+                    ButtonType.CANCEL, ButtonType.OK);
             if (confirm.showAndWait().orElse(ButtonType.CANCEL) == ButtonType.OK) {
-                dbRunner.rundb(db -> db.removeWord(w.text()), removed -> {
+                if (state.isDatabaseConnected()) {
+                    dbRunner.rundb(db -> db.removeWord(w.text()), removed -> {
+                        selected.setText("Select a word");
+                        pairs.getItems().clear();
+                        state.setStatus(removed ? "Deleted \"" + w.text() + "\" from the Database" : "\"" + w.text() + "\" was already gone");
+                        loadWords.run();
+                    }, "Couldn't delete from Database: ");
+                } else {
                     selected.setText("Select a word");
                     pairs.getItems().clear();
-                    state.setStatus(removed ? "Deleted \"" + w.text() + "\" from the Database" : "\"" + w.text() + "\" was already gone");
-                    loadWords.run();
-                }, "Couldn't delete from Database: ");
+                    words.remove(w);
+                    state.getWords().remove(w);
+                    state.getTransitions().remove(w.text());
+                    state.getTransitions().values().forEach(m -> m.remove(w.text()));
+                    state.setStatus("Word deleted from in-memory model");
+                }
             }
         });
 
@@ -197,26 +239,30 @@ public class VocabularyView {
                 split);
     }
 
-
-    //fill in the follow table and work out each word's prob based on frequency
-    //we can change this if we want it to do it based on algorithm
-    private void showFollowers(TableView<TransitionItem> pairs, List<FollowerRow> followers){
+    // Written by Ayush Kafley (axk220167) 11/05/2026
+    // fill in the follow table and work out each word's prob based on frequency
+    private void showFollowers(TableView<TransitionItem> pairs, List<FollowerRow> followers) {
         int sum = followers.stream().mapToInt(FollowerRow::follows).sum();
-        for(FollowerRow f : followers)
+        for (FollowerRow f : followers)
             pairs.getItems().add(new TransitionItem(f.word(), f.follows(), String.format("%.1f%%", 100.0 * f.follows() / Math.max(1, sum))));
     }
 
-    //Write the new update counts to mySQL then updates the tabel once MySQL confirms change
-    private void saveCount(WordItem word, int total, int start, int end){
+    // Written by Ayush Kafley (axk220167) 11/05/2026
+    // Write the new update counts to MySQL then update the table once MySQL confirms change
+    private void saveCount(WordItem word, int total, int start, int end) {
         dbRunner.rundb(db -> db.updateWordFrequencies(word.text(), total, start, end), saved -> {
-            if(!saved){
+            if (!saved) {
                 state.setStatus("\"" + word.text() + "\" is no longer in the database. Please reload and try again");
                 return;
             }
+            WordItem updated = new WordItem(word.text(), total, start, end, word.follows());
             int index = words.indexOf(word);
-            if(index >= 0)
-                words.set(index, new WordItem(word.text(), total, start, end, word.follows()));
+            if (index >= 0)
+                words.set(index, updated);
+            int stateIndex = state.getWords().indexOf(word);
+            if (stateIndex >= 0)
+                state.getWords().set(stateIndex, updated);
             state.setStatus("Saved changes of \"" + word.text() + "\" to the Database");
-        },"Couldn't save to the Database: ");
+        }, "Couldn't save to the Database: ");
     }
 }

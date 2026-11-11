@@ -1,10 +1,16 @@
-// Oudom Pach OTP220001 10/20/2026
+// Oudom Pach OTP220001 10/20/2026 Initial Creation: Central observable application state container
 package frontend.state;
 
+import backend.Database.DatabaseManager;
+import backend.Database.TransitionData;
+import backend.Database.WordData;
+import frontend.UIFactory;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
+
+import java.sql.SQLException;
 import java.util.*;
 import backend.Ingestion.Token;
 
@@ -33,6 +39,9 @@ public class AppState {
     private final Map<String, Map<String, Integer>> transitions = new HashMap<>();
     private final StringProperty statusText = new SimpleStringProperty("Corpus engine online · Demo data · No database connected"); // shows state at footer
     private final Random random = new Random();
+
+    // Active DatabaseManager reference (null if offline / demo mode)
+    private DatabaseManager databaseManager;
 
     public static final String[] SAMPLES = { //using sample strings for now
             "It is a truth universally acknowledged that a single man in possession of a good fortune must be in want of a wife.",
@@ -65,12 +74,143 @@ public class AppState {
     // Updates the footer status bar message across the application
     public void setStatus(String message) { statusText.set(message); }
 
+    // Oudom Pach OTP220001 11/3/2026 Revised: Added MySQL connection handling and database hydration for words and transitions
+    public DatabaseManager getDatabaseManager() { return databaseManager; }
+    public void setDatabaseManager(DatabaseManager databaseManager) { this.databaseManager = databaseManager; }
+    public boolean isDatabaseConnected() { return databaseManager != null; }
+
+    // Oudom Pach OTP220001 11/08/26 Revised: Hydrates in-memory state using getImportedFileRecords and getAllWordData to coexist with PR #70 query records
+    // Hydrates the AppState directly from MySQL tables (words, transitions, imported_files)
+    public void loadFromDatabase(DatabaseManager db) throws SQLException {
+        this.databaseManager = db;
+        List<DatabaseManager.ImportedFileRecord> files = db.getImportedFileRecords();
+        List<WordData> dbWords = db.getAllWordData();
+        List<TransitionData> dbTransitions = db.getAllTransitions();
+
+        if (dbWords.isEmpty() && files.isEmpty()) {
+            setStatus("MySQL connected · Database is empty. Import a .txt corpus to begin.");
+            return;
+        }
+
+        // Clear mock demo data and history
+        words.clear();
+        transitions.clear();
+        corpora.clear();
+        history.clear();
+
+        // Populate transitions
+        for (TransitionData t : dbTransitions) {
+            transitions.computeIfAbsent(t.getWord(), k -> new HashMap<>())
+                    .put(t.getNextWord(), t.getFrequency());
+        }
+
+        // Populate words
+        List<WordItem> loadedWords = new ArrayList<>();
+        for (WordData wd : dbWords) {
+            int follows = transitions.getOrDefault(wd.getWord(), Map.of()).size();
+            loadedWords.add(new WordItem(wd.getWord(), wd.getTotalFrequency(), wd.getStartFrequency(), wd.getEndFrequency(), follows));
+        }
+        words.setAll(loadedWords);
+
+        // Populate corpora table
+        for (DatabaseManager.ImportedFileRecord f : files) {
+            corpora.add(new CorpusItem(f.filename(), String.format("%,d words", f.wordCount()), f.importDate()));
+        }
+
+        setStatus(String.format("MySQL connected · Loaded %,d words and %,d bi-gram pairs", words.size(), dbTransitions.size()));
+    }
+
+    // Merges newly ingested corpus data into in-memory collections and adds file to history
+    public void applyIngestedCorpus(String bookTitle, int totalWords, long sizeBytes,
+                                    Collection<WordData> newWords, Collection<TransitionData> newTransitions) {
+        // Merge transitions
+        for (TransitionData t : newTransitions) {
+            transitions.computeIfAbsent(t.getWord(), k -> new HashMap<>())
+                    .merge(t.getNextWord(), t.getFrequency(), Integer::sum);
+        }
+
+        // Merge word counts
+        Map<String, int[]> countMap = new TreeMap<>();
+        for (WordItem existing : words) {
+            countMap.put(existing.text(), new int[]{existing.total(), existing.starts(), existing.ends()});
+        }
+        for (WordData wd : newWords) {
+            int[] counts = countMap.computeIfAbsent(wd.getWord(), k -> new int[3]);
+            counts[0] += wd.getTotalFrequency();
+            counts[1] += wd.getStartFrequency();
+            counts[2] += wd.getEndFrequency();
+        }
+
+        List<WordItem> updatedList = new ArrayList<>();
+        countMap.forEach((w, c) -> {
+            int follows = transitions.getOrDefault(w, Map.of()).size();
+            updatedList.add(new WordItem(w, c[0], c[1], c[2], follows));
+        });
+        words.setAll(updatedList);
+
+        // Add to imported files list
+        corpora.add(0, new CorpusItem(bookTitle, String.format("%,d words", totalWords), UIFactory.now()));
+    }
+
+    // Oudom Pach OTP220001 11/3/2026 Revised: Added self-ingestion to persist generated sentences to MySQL and UI state
+    // Self-ingests a generated sentence into both the database (if connected) and in-memory collections
+    public void selfIngestSentence(String sentence) {
+        String clean = sentence.toLowerCase().replaceAll("[^\\p{L}\\p{N}' ]", " ").trim();
+        if (clean.isEmpty()) return;
+        String[] tokens = clean.split("\\s+");
+        if (tokens.length == 0) return;
+
+        Map<String, WordData> wordBatch = new HashMap<>();
+        List<TransitionData> transBatch = new ArrayList<>();
+
+        for (int i = 0; i < tokens.length; i++) {
+            String word = tokens[i];
+            boolean isStart = (i == 0);
+            boolean isEnd = (i == tokens.length - 1);
+
+            WordData wd = wordBatch.get(word);
+            if (wd == null) {
+                wordBatch.put(word, new WordData(word, isStart, isEnd));
+            } else {
+                wd.addOccurrence(isStart, isEnd);
+            }
+
+            if (i + 1 < tokens.length) {
+                transBatch.add(new TransitionData(tokens[i], tokens[i + 1]));
+            }
+        }
+
+        // Persist to MySQL if available
+        if (databaseManager != null) {
+            try {
+                databaseManager.batchAdd(wordBatch.values(), transBatch);
+            } catch (SQLException e) {
+                System.err.println("Self-ingest DB error: " + e.getMessage());
+            }
+        }
+
+        // Apply to in-memory state
+        applyIngestedCorpus("Self-Ingested", tokens.length, 0, wordBatch.values(), transBatch);
+    }
+
+    public void updateWordInDb(String word, int total, int starts, int ends) throws SQLException {
+        if (databaseManager != null) {
+            databaseManager.updateWordFrequencies(word, total, starts, ends);
+        }
+    }
+
+    public void deleteWordFromDb(String word) throws SQLException {
+        if (databaseManager != null) {
+            databaseManager.removeWord(word);
+        }
+    }
+
     // Counts how many times an exact sentence string appears in the generation history (used for duplicate detection)
     public long countOccurrences(String sentence) {
         return history.stream().filter(l -> l.sentence().equals(sentence)).count();
     }
 
-    // Mock Ingestion (To be replaced by Backend Parser + JDBC later)
+    // Mock Ingestion (Retained as safe offline demo fallback when no database is configured)
     public void ingestDemoText(String text) {
         // TreeMap keeps words sorted alphabetically while storing [0]=total, [1]=starts, [2]=ends
         Map<String, int[]> counts = new TreeMap<>();
@@ -106,8 +246,8 @@ public class AppState {
     // Mock Sentence Generator (To be replaced by Backend Strategy classes later)
     // will just use basic calculations of the sum of all follow word counts and picks next word will use our actual algorithim instead
     public String generateMockSentence(String first, boolean weighted) {
-        // Clean the user's starting word (take the first word in lowercase, or default to "it" if blank)
-        String current = first.strip().toLowerCase().split("\\s+")[0];
+        // Clean the user's starting word (take the first word in lowercase, or default to "it" if blank/null)
+        String current = (first == null || first.isBlank()) ? "it" : first.strip().toLowerCase().split("\\s+")[0];
         if (current.isBlank()) current = "it";
         List<String> result = new ArrayList<>();
         result.add(current);
@@ -148,7 +288,7 @@ public class AppState {
         return Character.toUpperCase(sentence.charAt(0)) + sentence.substring(1) + ".";
     }
 
-    // In AppState.java:
+    // Oudom Pach OTP220001 10/25/2026 Revised: Added stream ingestion iterator helper to parse corpus tokens and bi-grams
     public void ingestCorpusStream(Iterator<Token> tokenizer) {
         Map<String, int[]> counts = new TreeMap<>();
         // Preserve existing counts from previous imports

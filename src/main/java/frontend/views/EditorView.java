@@ -1,5 +1,5 @@
-// Oudom Pach OTP220001 10/20/2026
-//Ayush Kafley axk220167 11/5/2026
+// Oudom Pach OTP220001 10/20/2026 Initial Creation: Composition text editor and sentence generator tab
+// Ayush Kafley axk220167 11/05/2026 Revised: Integrated DbRunner for database-driven random word selection
 package frontend.views;
 
 import backend.Database.DatabaseManager;
@@ -13,15 +13,15 @@ import javafx.scene.Node;
 import javafx.scene.control.*;
 import javafx.scene.input.KeyCode;
 import javafx.scene.layout.*;
-import java.util.*;
 
+import java.util.*;
 
 /* Tab 1:
     Makes the text editor and interactive sentence generator on the left and right hand side encapsulating it.
  */
 public class EditorView {
     private final AppState state;
-    private final TextArea editor = new TextArea("It is a truth universally acknowledged that a single man ");
+    private final TextArea editor = new TextArea();
     private final Random random = new Random();
     //runner object to call all DB transactions on a background thread to not freeze the app
     private final DbRunner dbRunner;
@@ -35,65 +35,112 @@ public class EditorView {
         editor.setWrapText(true);
         editor.getStyleClass().add("composition");
         editor.setPrefHeight(340);
+        editor.setPromptText("Type your composition here, or generate and add sentences from the right panel...");
 
-        //The editor.text listener property watch every character type into text area and predicts onlys when delimiter or space is typed.
+        // Oudom Pach OTP220001 11/3/2026 Revised: Added dynamic predictive suggestions and TAB auto-complete
+        // Holds the top suggested word so typing TAB automatically chooses it
+        final String[] topWordForTab = new String[1];
+
+        // The editor.text listener watches every character and predicts the next word when space is typed
         ContextMenu suggestions = new ContextMenu();
         editor.textProperty().addListener((o, old, value) -> {
             suggestions.hide();
-            if (value.endsWith(" ") && editor.isFocused()) {  // if space and editor is focused will open up a context menu of predicted words for user to pick from
-                suggestions.getItems().clear();
+            topWordForTab[0] = null;
 
-                // sample choices so far will be changed
-                String[] choices = {"in", "must", "who", "of"};
-                String[] probabilities = {"42%", "21%", "14%", "9%"};
-                for (int i = 0; i < choices.length; i++) {  //this just creates the menu
-                    String choice = choices[i];
-                    MenuItem item = new MenuItem((i + 1) + ".  " + choice + "                  " + probabilities[i]);
-                    item.setOnAction(e -> editor.insertText(editor.getCaretPosition(), choice + " "));
-                    suggestions.getItems().add(item);
+            if (value != null && value.endsWith(" ") && editor.isFocused()) {
+                int caret = editor.getCaretPosition();
+                String textBeforeCaret = value.substring(0, Math.min(caret, value.length())).trim();
+
+                if (!textBeforeCaret.isEmpty()) {
+                    int lastSpace = textBeforeCaret.lastIndexOf(' ');
+                    String lastWord = (lastSpace == -1 ? textBeforeCaret : textBeforeCaret.substring(lastSpace + 1))
+                            .toLowerCase()
+                            .replaceAll("[^\\p{L}\\p{N}']", "");
+
+                    Map<String, Integer> nextWords = state.getTransitions().get(lastWord);
+                    if (nextWords != null && !nextWords.isEmpty()) {
+                        suggestions.getItems().clear();
+
+                        int totalSum = nextWords.values().stream().mapToInt(Integer::intValue).sum();
+                        List<Map.Entry<String, Integer>> sorted = new ArrayList<>(nextWords.entrySet());
+                        sorted.sort((a, b) -> Integer.compare(b.getValue(), a.getValue()));
+
+                        topWordForTab[0] = sorted.get(0).getKey();
+                        int limit = Math.min(5, sorted.size());
+
+                        for (int i = 0; i < limit; i++) {
+                            Map.Entry<String, Integer> entry = sorted.get(i);
+                            String choice = entry.getKey();
+                            double pct = (entry.getValue() * 100.0) / Math.max(1, totalSum);
+
+                            MenuItem item = new MenuItem(String.format("%d.  %-15s (%4.1f%%)", i + 1, choice, pct));
+                            item.setOnAction(e -> {
+                                editor.insertText(editor.getCaretPosition(), choice + " ");
+                                suggestions.hide();
+                            });
+                            suggestions.getItems().add(item);
+                        }
+                        suggestions.show(editor, Side.BOTTOM, 20, -120);
+                    }
                 }
-                suggestions.show(editor, Side.BOTTOM, 20, -120);
             }
         });
 
-        //this listens for when user types tab when the menu is open and it just adds the top predicted word in the context menu else escape exits it
+        // Listens for TAB when suggestions are open to accept the top word; ESC dismisses
         editor.setOnKeyPressed(e -> {
-            if (e.getCode() == KeyCode.TAB && suggestions.isShowing()) {
+            if (e.getCode() == KeyCode.TAB && suggestions.isShowing() && topWordForTab[0] != null) {
                 e.consume();
                 suggestions.hide();
-                editor.insertText(editor.getCaretPosition(), "in ");
+                editor.insertText(editor.getCaretPosition(), topWordForTab[0] + " ");
             } else if (e.getCode() == KeyCode.ESCAPE) {
                 suggestions.hide();
             }
         });
 
-
-        //live word/character count and splits text by whitespace
-        Label counter = UIFactory.label("11 words", "muted");
+        // Live word and character counter styled in white
+        Label counter = UIFactory.label("0 words · 0 characters", "helper-text");
         editor.textProperty().addListener((o, a, b) ->
-                counter.setText((b.isBlank() ? 0 : b.trim().split("\\s+").length) + " words · " + b.length() + " characters"));
+                counter.setText((b == null || b.isBlank() ? 0 : b.trim().split("\\s+").length)
+                        + " words · " + (b == null ? 0 : b.length()) + " characters"));
+
+        Label suggestionHint = UIFactory.label(
+                state.isDatabaseConnected()
+                        ? "Live probabilistic suggestions powered by MySQL corpus."
+                        : "Demo suggestions · Connect database or import corpus to train.",
+                "helper-text");
 
         VBox left = UIFactory.panel("Composition",
                 editor,
-                UIFactory.label("Click/Tab to choose a word, or keep typing to ignore.", "muted"),
-                UIFactory.label("Demo suggestions · Import a corpus to train the generator.", "muted"),
+                UIFactory.label("Click/Tab to choose a suggested word, or keep typing to ignore.", "helper-text"),
+                suggestionHint,
                 counter,
                 UIFactory.button("Clear text", "", editor::clear));
         VBox.setVgrow(editor, Priority.ALWAYS);
 
-        //uses a textfield for starting word and a random word button that pulls random entry in get words
-        TextField starting = new TextField("It");
-        starting.setPromptText("Starting word");
-        Button randomWord = UIFactory.button("Random Word", "", () -> {
-            dbRunner.rundb(DatabaseManager::getRandomWord, word -> {
-                if(word == null)
-                    state.setStatus("No words in the DB yet, import text first.");
-                else
-                    starting.setText(word);
-            }, "Could not get random word from DB: ");
-        });
+        // Starting word text field: pick the most common starting word from the database if available
+        String defaultStartingWord = state.getWords().stream()
+                .max(Comparator.comparingInt(AppState.WordItem::starts))
+                .map(AppState.WordItem::text)
+                .orElse("it");
+        String formattedStart = Character.toUpperCase(defaultStartingWord.charAt(0)) + defaultStartingWord.substring(1);
 
-        //builds right side of tab 1
+        TextField starting = new TextField(formattedStart);
+        starting.setPromptText("Starting word");
+        // Oudom Pach OTP220001 11/08/26 Revised: Combined DbRunner database random word lookup with in-memory fallback for offline resilience
+        Button randomWord = UIFactory.button("Random Word", "", () -> {
+            if (state.isDatabaseConnected()) {
+                dbRunner.rundb(DatabaseManager::getRandomWord, word -> {
+                    if (word == null) {
+                        state.setStatus("No words in the DB yet, import text first.");
+                    } else {
+                        starting.setText(Character.toUpperCase(word.charAt(0)) + word.substring(1));
+                    }
+                }, "Could not get random word from DB: ");
+            } else if (!state.getWords().isEmpty()) {
+                String picked = state.getWords().get(random.nextInt(state.getWords().size())).text();
+                starting.setText(Character.toUpperCase(picked.charAt(0)) + picked.substring(1));
+            }
+        });
 
         HBox startRow = new HBox(10, starting, randomWord);
         HBox.setHgrow(starting, Priority.ALWAYS);
@@ -109,17 +156,28 @@ public class EditorView {
         HBox.setHgrow(algoBox, Priority.ALWAYS);
         HBox controls = new HBox(15, algoBox, new VBox(7, new Label("Batch Count"), count));
 
-        CheckBox selfIngest = new CheckBox("Self-Ingest generated sentences into DB (local demo)");
+        CheckBox selfIngest = new CheckBox("Self-Ingest generated sentences into DB");
         VBox batch = new VBox(9);
         List<CheckBox> selections = new ArrayList<>();
-        List<String> generated = new ArrayList<>(Arrays.asList(AppState.SAMPLES));
+        List<String> generated = new ArrayList<>();
 
+        // If the database is connected and has words, generate an initial batch using real Markov probabilities
+        if (!state.getWords().isEmpty()) {
+            for (int i = 0; i < 5; i++) {
+                generated.add(state.generateMockSentence(starting.getText(), true));
+            }
+        }
 
-        //builds the sentence card hbox rows in the scroll pane so for each generated sentence, pairing a selection with a checkbox with add to text, appends to editor
-        //this is on the right side of tab 1
+        // Builds the sentence card rows in the scroll pane
         Runnable render = () -> {
             batch.getChildren().clear();
             selections.clear();
+
+            if (generated.isEmpty()) {
+                batch.getChildren().add(UIFactory.label("No sentences generated yet. Click 'Generate Sentences' above to build sentences from your database.", "helper-text"));
+                return;
+            }
+
             for (String sentence : generated) {
                 CheckBox selected = new CheckBox();
                 selections.add(selected);
@@ -127,23 +185,24 @@ public class EditorView {
                 body.setWrapText(true);
                 body.setMaxWidth(Double.MAX_VALUE);
                 Button add = UIFactory.button("Add to Text", "", () -> appendToEditor(sentence));
-                VBox content = new VBox(8, body, add);
-                HBox.setHgrow(content, Priority.ALWAYS);
-                HBox card = new HBox(10, selected, content);
+                VBox cardContent = new VBox(8, body, add);
+                HBox.setHgrow(cardContent, Priority.ALWAYS);
+                HBox card = new HBox(10, selected, cardContent);
                 card.getStyleClass().add("sentence-card");
                 batch.getChildren().add(card);
             }
         };
         render.run();
 
-        // Logic for if generate sentence is chceked then the sentence is fed back into injestor. For self injestion
+        // Oudom Pach OTP220001 11/3/2026 Revised: Connected sentence generation to Markov algorithm and self-ingestion
+        // Logic for generating sentences using the active algorithm
         Button generate = UIFactory.button("Generate Sentences", "primary", () -> {
             generated.clear();
             for (int i = 0; i < count.getValue(); i++) {
                 String sentence = state.generateMockSentence(starting.getText(), algorithm.getValue().startsWith("Weighted"));
                 generated.add(sentence);
                 state.getHistory().add(new LogItem(sentence, UIFactory.now(), algorithm.getValue()));
-                if (selfIngest.isSelected()) state.ingestDemoText(sentence);
+                if (selfIngest.isSelected()) state.selfIngestSentence(sentence);
             }
             render.run();
         });
@@ -154,11 +213,12 @@ public class EditorView {
         list.setPrefHeight(240);
         VBox.setVgrow(list, Priority.ALWAYS);
 
-        //builds more of the UI here on the page
         HBox actions = new HBox(8,
                 UIFactory.button("Add Selected to Body of Text", "", () -> {
                     for (int i = 0; i < generated.size(); i++) {
-                        if (selections.get(i).isSelected()) appendToEditor(generated.get(i));
+                        if (i < selections.size() && selections.get(i).isSelected()) {
+                            appendToEditor(generated.get(i));
+                        }
                     }
                 }),
                 UIFactory.button("Add All to Body of Text", "", () -> appendToEditor(String.join(" ", generated))));
@@ -177,7 +237,7 @@ public class EditorView {
     }
 
     private void appendToEditor(String sentence) {
-        editor.appendText((editor.getText().endsWith(" ") ? "" : " ") + sentence + " ");
+        editor.appendText((editor.getText().endsWith(" ") || editor.getText().isEmpty() ? "" : " ") + sentence + " ");
         state.setStatus("Added to composition");
     }
 }

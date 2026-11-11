@@ -1,4 +1,4 @@
-// Oudom Pach OTP220001 10/20/2026
+// Oudom Pach OTP220001 10/20/2026 Initial Creation: Static UI component and styling factory
 package frontend;
 
 import javafx.beans.property.ReadOnlyStringWrapper;
@@ -16,6 +16,21 @@ import java.util.function.Function;
 Factory Method pattern:
     what this class does is it gets rid of repetitive Java FX boilerplate code
     we can just call these static styling so a view can get the styling without having to write more styling code
+
+ */
+
+
+/*
+    Without `UIFactory`, creating a styled label takes 3 lines:
+    ```java
+    Label l = new Label("Hello");
+    l.getStyleClass().add("muted");
+    // pass l to parent
+    ```
+
+    With `UIFactory`, it's 1 line:
+    ```java
+    UIFactory.label("Hello", "muted")
 
  */
 public final class UIFactory {
@@ -48,11 +63,12 @@ public final class UIFactory {
         return box;
     }
 
+    // Oudom Pach OTP220001 11/3/2026 Revised: Added table column helper and helper-text label styles
     public static VBox page(String title, String subtitle, Node content) {
         VBox page = new VBox(12,
                 label("YOUR LANGUAGE LAB", "eyebrow"),
                 label(title, "title"),
-                label(subtitle, "muted"),
+                label(subtitle, "helper-text"),
                 content
         );
         page.setPadding(new Insets(25));

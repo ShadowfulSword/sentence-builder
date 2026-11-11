@@ -22,7 +22,27 @@ import java.util.List;
 //The class has AutoCloseable so we can open it from any script and call connection.close() to close it
 //or open connections with a try-with-resources to AutoClose
 public class DatabaseManager implements AutoCloseable {
-    public static final String DB_URL = "jdbc:mysql://localhost:3306/sentence_builder?rewriteBatchedStatements=true"; //past the ? allows the DB to rewrite the batch calls together rather than as individual transactions when pased through
+    public static final String DB_URL = "jdbc:mysql://localhost:3306/sentence_builder?rewriteBatchedStatements=true"; //past the ? allows the DB to rewrite the batch calls together rather than as individual transactions when passed through
+
+    // Oudom Pach OTP220001 11/3/2026 Revised: Added default connection constants, ImportedFileRecord, and createDefault factory method
+    // Oudom Pach OTP220001 11/08/26 Revised: Reconciled DEFAULT_URL with DB_URL and preserved environment-variable fallback factory
+    public static final String DEFAULT_URL = DB_URL;
+    public static final String DEFAULT_USER = "root";
+    public static final String DEFAULT_PASSWORD = "";
+
+    // Record to represent an imported file row
+    public record ImportedFileRecord(int id, String filename, int wordCount, String importDate) {}
+
+    // Factory method to establish a connection using environment variables (SB_DB_URL, SB_DB_USER, SB_DB_PASSWORD) or defaults
+    public static DatabaseManager createDefault() throws SQLException {
+        String url = System.getenv("SB_DB_URL");
+        if (url == null || url.isBlank()) url = DEFAULT_URL;
+        String user = System.getenv("SB_DB_USER");
+        if (user == null) user = DEFAULT_USER;
+        String pword = System.getenv("SB_DB_PASSWORD");
+        if (pword == null) pword = DEFAULT_PASSWORD;
+        return new DatabaseManager(url, user, pword);
+    }
 
     //the cion object associated with all the functions. should not be mutable
     private final Connection conn;
@@ -285,20 +305,96 @@ public class DatabaseManager implements AutoCloseable {
             ps.executeBatch();
         }
     }
+    // Oudom Pach OTP220001 11/3/2026 Revised: Added getAllWordData, getAllTransitions, getTransitionsForWord, and getImportedFileRecords
+    // Oudom Pach OTP220001 11/08/26 Revised: Reconciled ingestion retrieval methods (getAllWordData, getImportedFileRecords) to coexist with PR #70 on-demand UI queries
+    // Retrieve all words stored in the words table as WordData objects
+    public List<WordData> getAllWordData() throws SQLException {
+        List<WordData> words = new ArrayList<>();
+        String sql = "SELECT word, total_frequency, start_frequency, end_frequency FROM words ORDER BY total_frequency DESC";
+        try (PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                words.add(new WordData(
+                        rs.getString("word"),
+                        rs.getInt("total_frequency"),
+                        rs.getInt("start_frequency"),
+                        rs.getInt("end_frequency")
+                ));
+            }
+        }
+        return words;
+    }
 
-    //word row, each word followed by its counts and the number of unique follows sorted alphabetically
-    public List<WordRow> getAllWords() throws SQLException{
+    // Retrieve all transitions stored in the transitions table
+    public List<TransitionData> getAllTransitions() throws SQLException {
+        List<TransitionData> transitions = new ArrayList<>();
+        String sql = "SELECT word, next_word, frequency FROM transitions";
+        try (PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                transitions.add(new TransitionData(
+                        rs.getString("word"),
+                        rs.getString("next_word"),
+                        rs.getInt("frequency")
+                ));
+            }
+        }
+        return transitions;
+    }
+
+    // Retrieve all transitions for a given word
+    public List<TransitionData> getTransitionsForWord(String word) throws SQLException {
+        List<TransitionData> transitions = new ArrayList<>();
+        String sql = "SELECT word, next_word, frequency FROM transitions WHERE word = ? ORDER BY frequency DESC";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, word);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    transitions.add(new TransitionData(
+                            rs.getString("word"),
+                            rs.getString("next_word"),
+                            rs.getInt("frequency")
+                    ));
+                }
+            }
+        }
+        return transitions;
+    }
+
+    // Retrieve all imported files from the imported_files table
+    public List<ImportedFileRecord> getImportedFileRecords() throws SQLException {
+        List<ImportedFileRecord> files = new ArrayList<>();
+        String sql = "SELECT file_id, filename, wordcount, import_date FROM imported_files ORDER BY import_date DESC";
+        try (PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                Timestamp ts = rs.getTimestamp("import_date");
+                String dateStr = ts != null ? ts.toString() : "";
+                files.add(new ImportedFileRecord(
+                        rs.getInt("file_id"),
+                        rs.getString("filename"),
+                        rs.getInt("wordcount"),
+                        dateStr
+                ));
+            }
+        }
+        return files;
+    }
+
+    // Written by Ayush Kafley (axk220167) 11/05/2026
+    // word row, each word followed by its counts and the number of unique follows sorted alphabetically
+    public List<WordRow> getAllWords() throws SQLException {
         List<WordRow> rows = new ArrayList<>();
-        //use left join to recieve words that are only ever at the end of the sentances and have them set to 0
+        // use left join to receive words that are only ever at the end of the sentences and have them set to 0
         String query = """
                 SELECT w.word, w.total_frequency, w.start_frequency, w.end_frequency, COUNT(t.next_word)
                 FROM words w LEFT JOIN transitions t ON t.word = w.word
                 GROUP BY w.word, w.total_frequency, w.start_frequency, w.end_frequency
                 ORDER BY w.word""";
 
-        try(Statement s = conn.createStatement()){
-            try(ResultSet rs = s.executeQuery(query)){
-                while(rs.next()){
+        try (Statement s = conn.createStatement()) {
+            try (ResultSet rs = s.executeQuery(query)) {
+                while (rs.next()) {
                     rows.add(new WordRow(rs.getString(1), rs.getInt(2), rs.getInt(3), rs.getInt(4), rs.getInt(5)));
                 }
             }
@@ -306,42 +402,45 @@ public class DatabaseManager implements AutoCloseable {
         return rows;
     }
 
-    //get every word that follows the passed word in most frequent and alphabetical order
-    //empty list = no follows (end of sentances)
-    public List<FollowerRow> getFollowers(String word) throws SQLException{
+    // Written by Ayush Kafley (axk220167) 11/05/2026
+    // get every word that follows the passed word in most frequent and alphabetical order
+    // empty list = no follows (end of sentences)
+    public List<FollowerRow> getFollowers(String word) throws SQLException {
         List<FollowerRow> rows = new ArrayList<>();
         String query = "SELECT next_word, frequency FROM transitions where word = ? ORDER BY frequency DESC, next_word ASC";
-        try(PreparedStatement ps = conn.prepareStatement(query)){
+        try (PreparedStatement ps = conn.prepareStatement(query)) {
             ps.setString(1, word);
-            try(ResultSet rs = ps.executeQuery()){
-                while(rs.next())
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next())
                     rows.add(new FollowerRow(rs.getString(1), rs.getInt(2)));
             }
         }
-        return  rows;
+        return rows;
     }
 
-    //word count, transiton count and most frequent starting word
-    public CorpusStats getCorpusStats() throws SQLException{
+    // Written by Ayush Kafley (axk220167) 11/05/2026
+    // word count, transition count and most frequent starting word
+    public CorpusStats getCorpusStats() throws SQLException {
         String query = """
                 SELECT (SELECT COUNT(*) FROM words),
                        (SELECT COUNT(*) FROM transitions),
                        (SELECT word FROM words WHERE start_frequency > 0 ORDER BY start_frequency DESC, word ASC LIMIT 1)""";
-        try(Statement s = conn.createStatement()){
-            try(ResultSet rs = s.executeQuery(query)){
-                rs.next(); //get one row
+        try (Statement s = conn.createStatement()) {
+            try (ResultSet rs = s.executeQuery(query)) {
+                rs.next(); // get one row
                 return new CorpusStats(rs.getInt(1), rs.getInt(2), rs.getString(3));
             }
         }
     }
 
-    //get every imported file ordered by newest recorded import date
-    public List<ImportedFileRow> getImportedFiles() throws SQLException{
+    // Written by Ayush Kafley (axk220167) 11/05/2026
+    // get every imported file ordered by newest recorded import date
+    public List<ImportedFileRow> getImportedFiles() throws SQLException {
         List<ImportedFileRow> rows = new ArrayList<>();
         String query = "SELECT filename, wordcount, import_date FROM imported_files ORDER BY import_date DESC";
 
-        try(Statement s = conn.createStatement()){
-            try(ResultSet rs = s.executeQuery(query)){
+        try (Statement s = conn.createStatement()) {
+            try (ResultSet rs = s.executeQuery(query)) {
                 while (rs.next())
                     rows.add(new ImportedFileRow(rs.getString(1), rs.getInt(2), rs.getTimestamp(3).toLocalDateTime()));
             }
@@ -349,23 +448,24 @@ public class DatabaseManager implements AutoCloseable {
         return rows;
     }
 
-    //get one random word from the DB or null if the table has nothing in yet
-    public String getRandomWord() throws SQLException{
+    // Written by Ayush Kafley (axk220167) 11/05/2026
+    // get one random word from the DB or null if the table has nothing in yet
+    public String getRandomWord() throws SQLException {
         int totalRow = 0;
-        try(Statement s = conn.createStatement()){
+        try (Statement s = conn.createStatement()) {
             ResultSet rs = s.executeQuery("SELECT COUNT(*) FROM words");
             rs.next();
             totalRow = rs.getInt(1);
         }
-        if(totalRow == 0)
+        if (totalRow == 0)
             return null;
 
-        int rand = (int)(Math.random() * totalRow);
-        try(PreparedStatement ps = conn.prepareStatement("SELECT word FROM words ORDER BY word LIMIT  1 OFFSET ?")){
+        int rand = (int) (Math.random() * totalRow);
+        try (PreparedStatement ps = conn.prepareStatement("SELECT word FROM words ORDER BY word LIMIT 1 OFFSET ?")) {
             ps.setInt(1, rand);
-            try(ResultSet rs = ps.executeQuery()){
-                return  rs.next() ? rs.getString(1) : null;
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getString(1) : null;
             }
         }
     }
-}
+    }
