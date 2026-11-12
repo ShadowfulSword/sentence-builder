@@ -145,6 +145,7 @@ public class MainApp extends Application {
         load.getStyleClass().add("primary");
         load.setOnAction(event -> {
             FileChooser chooser = new FileChooser();
+            chooser.setInitialDirectory(new File(System.getProperty("user.dir")+ "/documents/project_gutenberg"));
             chooser.setTitle("Select Project Gutenberg Corpus");
             chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Project Gutenberg Text (*.txt)", "*.txt"));
             File selected = chooser.showOpenDialog(stage);
