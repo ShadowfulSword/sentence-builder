@@ -8,6 +8,7 @@ import frontend.UIFactory;
 import frontend.state.AppState;
 import frontend.state.AppState.LogItem;
 import javafx.collections.FXCollections;
+import javafx.geometry.Pos;
 import javafx.geometry.Side;
 import javafx.scene.Node;
 import javafx.scene.control.*;
@@ -122,7 +123,9 @@ public class EditorView {
                 .max(Comparator.comparingInt(AppState.WordItem::starts))
                 .map(AppState.WordItem::text)
                 .orElse("it");
-        String formattedStart = Character.toUpperCase(defaultStartingWord.charAt(0)) + defaultStartingWord.substring(1);
+        String formattedStart = (defaultStartingWord == null || defaultStartingWord.isEmpty())
+                ? "It"
+                : Character.toUpperCase(defaultStartingWord.charAt(0)) + defaultStartingWord.substring(1);
 
         TextField starting = new TextField(formattedStart);
         starting.setPromptText("Starting word");
@@ -141,8 +144,11 @@ public class EditorView {
                 starting.setText(Character.toUpperCase(picked.charAt(0)) + picked.substring(1));
             }
         });
-
-        HBox startRow = new HBox(10, starting, randomWord);
+        //Oudom Pach OTP220001 11/12/2026 Revised: Starting word placement and label
+        Label startLabel = new Label("Starting Word");
+        startLabel.setMinWidth(Region.USE_PREF_SIZE);
+        HBox startRow = new HBox(10, startLabel, starting, randomWord);
+        startRow.setAlignment(Pos.CENTER_LEFT);
         HBox.setHgrow(starting, Priority.ALWAYS);
 
         ComboBox<String> algorithm = new ComboBox<>(FXCollections.observableArrayList("Weighted Probabilistic", "Random / Alternative"));
@@ -150,23 +156,34 @@ public class EditorView {
         algorithm.setMaxWidth(Double.MAX_VALUE);
 
         Spinner<Integer> count = new Spinner<>(1, 25, 5);
-        count.setPrefWidth(100);
+        //Oudom Pach OTP220001 11/12/2026 Revised batch count field to type in it.
+        count.setEditable(true);
+        count.setPrefWidth(75);
+        count.setMinWidth(65);
 
-        VBox algoBox = new VBox(7, new Label("Algorithm"), algorithm);
+        // Restrict input to digits only
+        count.getEditor().setTextFormatter(new TextFormatter<Integer>(change ->
+                change.getControlNewText().matches("\\d*") ? change : null));
+
+        // Commit typed value when focus is lost
+        count.focusedProperty().addListener((o, wasFocused, isNowFocused) -> {
+            if (!isNowFocused) {
+                try {
+                    count.commitValue();
+                } catch (Exception ex) {
+                    count.getValueFactory().setValue(5);
+                }
+            }
+        });
+
+        VBox algoBox = new VBox(5, new Label("Algorithm"), algorithm);
         HBox.setHgrow(algoBox, Priority.ALWAYS);
-        HBox controls = new HBox(15, algoBox, new VBox(7, new Label("Batch Count"), count));
+        VBox countBox = new VBox(5, new Label("Batch Count"), count);
 
         CheckBox selfIngest = new CheckBox("Self-Ingest generated sentences into DB");
         VBox batch = new VBox(9);
         List<CheckBox> selections = new ArrayList<>();
         List<String> generated = new ArrayList<>();
-
-        // If the database is connected and has words, generate an initial batch using real Markov probabilities
-        if (!state.getWords().isEmpty()) {
-            for (int i = 0; i < 5; i++) {
-                generated.add(state.generateMockSentence(starting.getText(), true));
-            }
-        }
 
         // Builds the sentence card rows in the scroll pane
         Runnable render = () -> {
@@ -184,19 +201,32 @@ public class EditorView {
                 Label body = new Label(sentence);
                 body.setWrapText(true);
                 body.setMaxWidth(Double.MAX_VALUE);
+                HBox.setHgrow(body, Priority.ALWAYS);
+
                 Button add = UIFactory.button("Add to Text", "", () -> appendToEditor(sentence));
-                VBox cardContent = new VBox(8, body, add);
-                HBox.setHgrow(cardContent, Priority.ALWAYS);
-                HBox card = new HBox(10, selected, cardContent);
+                add.setMinWidth(Region.USE_PREF_SIZE);
+
+                HBox card = new HBox(10, selected, body, add);
+                card.setAlignment(Pos.CENTER_LEFT);
                 card.getStyleClass().add("sentence-card");
                 batch.getChildren().add(card);
             }
         };
+        //Oudom Pach OTP220001 11/12/2026 Added:
+        // If the database is connected and has words, generate an initial batch using real Markov probabilities
+        if (!state.getWords().isEmpty()) {
+            for (int i = 0; i < 5; i++) {
+                generated.add(state.generateMockSentence(starting.getText(), true));
+            }
+        }
         render.run();
 
         // Oudom Pach OTP220001 11/3/2026 Revised: Connected sentence generation to Markov algorithm and self-ingestion
         // Logic for generating sentences using the active algorithm
         Button generate = UIFactory.button("Generate Sentences", "primary", () -> {
+            try {
+                count.commitValue();
+            } catch (Exception ignored) {}
             generated.clear();
             for (int i = 0; i < count.getValue(); i++) {
                 String sentence = state.generateMockSentence(starting.getText(), algorithm.getValue().startsWith("Weighted"));
@@ -206,14 +236,18 @@ public class EditorView {
             }
             render.run();
         });
-        generate.setMaxWidth(Double.MAX_VALUE);
+        //Oudom Pach OTP220001 11/12/2026: Hbox to set alignment
+        generate.setMinWidth(Region.USE_PREF_SIZE);
+
+        HBox controls = new HBox(10, algoBox, countBox, generate);
+        controls.setAlignment(Pos.BOTTOM_LEFT);
 
         ScrollPane list = new ScrollPane(batch);
         list.setFitToWidth(true);
         list.setPrefHeight(240);
         VBox.setVgrow(list, Priority.ALWAYS);
 
-        HBox actions = new HBox(8,
+        HBox actions = new HBox(10,
                 UIFactory.button("Add Selected to Body of Text", "", () -> {
                     for (int i = 0; i < generated.size(); i++) {
                         if (i < selections.size() && selections.get(i).isSelected()) {
@@ -221,10 +255,13 @@ public class EditorView {
                         }
                     }
                 }),
+                //Oudom Pach OTP220001 11/12/2026 fix alignment of button to make it spaced
+                UIFactory.spacer(),
                 UIFactory.button("Add All to Body of Text", "", () -> appendToEditor(String.join(" ", generated))));
+        actions.setAlignment(Pos.CENTER_LEFT);
 
         VBox right = UIFactory.panel("Sentence generator",
-                new Label("Starting Word"), startRow, controls, generate, selfIngest,
+                startRow, controls, selfIngest,
                 UIFactory.label("GENERATED BATCH", "eyebrow"), list, actions);
 
         SplitPane split = new SplitPane(left, right);
