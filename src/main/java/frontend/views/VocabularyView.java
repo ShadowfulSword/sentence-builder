@@ -216,7 +216,7 @@ public class VocabularyView {
                 }
             }
         });
-
+        
         // Assemble the right panel containing the word details editor and follow-word table
         VBox right = UIFactory.panel("Word details · local editor",
                 selected,
@@ -224,7 +224,7 @@ public class VocabularyView {
                 new Label("Start Count"), starts,
                 new Label("End Count"), ends,
                 new Label("Follow-word transitions"), pairs,
-                save, delete);
+                new HBox( 10, save, UIFactory.spacer(),  delete));
 
         // Place the left explorer (65% width) and right editor (35% width) side-by-side
         SplitPane split = new SplitPane(left, right);
