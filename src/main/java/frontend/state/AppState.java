@@ -1,9 +1,13 @@
 // Oudom Pach OTP220001 10/20/2026 Initial Creation: Central observable application state container
+// Andrew Park AXP220253 11/16/2026 Updated to add in probabilistic and temperature algos for sentence gen
+
 package frontend.state;
 
 import backend.Database.DatabaseManager;
 import backend.Database.TransitionData;
 import backend.Database.WordData;
+import backend.ProbabilisticGenerator;
+import backend.TemperatureGenerator;
 import frontend.UIFactory;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
@@ -43,6 +47,10 @@ public class AppState {
     // Active DatabaseManager reference (null if offline / demo mode)
     private DatabaseManager databaseManager;
 
+    // Generation algorithms for sentence building
+    private final ProbabilisticGenerator probGenerator = new ProbabilisticGenerator(null);
+    private final TemperatureGenerator tempGenerator = new TemperatureGenerator(null);
+
     public static final String[] SAMPLES = { //using sample strings for now
             "It is a truth universally acknowledged that a single man in possession of a good fortune must be in want of a wife.",
             "It is not what we say or think that defines us but what we do.",
@@ -76,13 +84,20 @@ public class AppState {
 
     // Oudom Pach OTP220001 11/3/2026 Revised: Added MySQL connection handling and database hydration for words and transitions
     public DatabaseManager getDatabaseManager() { return databaseManager; }
-    public void setDatabaseManager(DatabaseManager databaseManager) { this.databaseManager = databaseManager; }
+    public void setDatabaseManager(DatabaseManager databaseManager) {
+        this.databaseManager = databaseManager;
+        this.probGenerator.setDatabaseManager(databaseManager);
+        this.tempGenerator.setDatabaseManager(databaseManager);
+    }
     public boolean isDatabaseConnected() { return databaseManager != null; }
 
     // Oudom Pach OTP220001 11/08/26 Revised: Hydrates in-memory state using getImportedFileRecords and getAllWordData to coexist with PR #70 query records
     // Hydrates the AppState directly from MySQL tables (words, transitions, imported_files)
     public void loadFromDatabase(DatabaseManager db) throws SQLException {
         this.databaseManager = db;
+        this.probGenerator.setDatabaseManager(db);
+        this.tempGenerator.setDatabaseManager(db);
+
         List<DatabaseManager.ImportedFileRecord> files = db.getImportedFileRecords();
         List<WordData> dbWords = db.getAllWordData();
         List<TransitionData> dbTransitions = db.getAllTransitions();
@@ -241,6 +256,26 @@ public class AppState {
         List<WordItem> updated = new ArrayList<>();
         counts.forEach((w, c) -> updated.add(new WordItem(w, c[0], c[1], c[2], transitions.getOrDefault(w, Map.of()).size())));
         words.setAll(updated);
+    }
+
+    // Sentence Generators
+    // Uses the probabilistic or temperature algorithms to pick words and create sentences
+    public String generateSentence(String first, boolean useTemperature, float temperature) {
+        if (databaseManager != null) {
+            if (useTemperature) {
+                tempGenerator.setTemperature(temperature);
+                String s = tempGenerator.generateSentence(first, 24);
+                if (s != null)
+                    return s;
+            } else {
+                String s = probGenerator.generateSentence(first, 24);
+                if (s != null)
+                    return s;
+            }
+        }
+
+        // Fallback to mock sentence generator if MySQL is disconnected
+        return generateMockSentence(first, !useTemperature);
     }
 
     // Mock Sentence Generator (To be replaced by Backend Strategy classes later)

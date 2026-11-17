@@ -224,7 +224,8 @@ public class DatabaseManager implements AutoCloseable {
         try (PreparedStatement pstmt = conn.prepareStatement("SELECT total_frequency, start_frequency, end_frequency FROM words w WHERE w.word = ?")){
             pstmt.setString(1, word);
             try(ResultSet rs = pstmt.executeQuery()){
-                rs.next();
+                if (!rs.next())
+                    return null;
                 return new WordData(word, rs.getInt("total_frequency"), rs.getInt("start_frequency"), rs.getInt("end_frequency"));
             }
         } catch (SQLException e) {

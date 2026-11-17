@@ -1,5 +1,6 @@
 // Oudom Pach OTP220001 10/20/2026 Initial Creation: Composition text editor and sentence generator tab
 // Ayush Kafley axk220167 11/05/2026 Revised: Integrated DbRunner for database-driven random word selection
+// Andrew Park AXP220253 11/16/2026 Revised: Implemented spinner UI for temperature algo driven sentence gen
 package frontend.views;
 
 import backend.Database.DatabaseManager;
@@ -151,9 +152,32 @@ public class EditorView {
         startRow.setAlignment(Pos.CENTER_LEFT);
         HBox.setHgrow(starting, Priority.ALWAYS);
 
-        ComboBox<String> algorithm = new ComboBox<>(FXCollections.observableArrayList("Weighted Probabilistic", "Random / Alternative"));
+        ComboBox<String> algorithm = new ComboBox<>(FXCollections.observableArrayList("Weighted Probabilistic", "Temperature"));
         algorithm.getSelectionModel().selectFirst();
         algorithm.setMaxWidth(Double.MAX_VALUE);
+
+        Spinner<Double> tempSpinner = new Spinner<>(0.1, 2.5, 1.0, 0.1);
+        tempSpinner.setEditable(true);
+        tempSpinner.setPrefWidth(75);
+        tempSpinner.setMinWidth(65);
+        tempSpinner.disableProperty().bind(algorithm.valueProperty().isEqualTo("Weighted Probabilistic"));
+
+        // Restrict input to non-negative decimal digits only
+        tempSpinner.getEditor().setTextFormatter(new TextFormatter<Double>(change ->
+            change.getControlNewText().matches("\\d*(\\.\\d*)?") ? change : null));
+
+        // Commit typed value when focus is lost, revert to 1.0 if empty/invalid
+        tempSpinner.focusedProperty().addListener((o, wasFocused, isNowFocused) -> {
+            if (!isNowFocused) {
+                try {
+                    tempSpinner.commitValue();
+                } catch (Exception ex) {
+                    tempSpinner.getValueFactory().setValue(1.0);
+                    tempSpinner.getEditor().setText("1.0");
+                }
+            }
+        });
+        VBox tempBox = new VBox(5, new Label("Temp"), tempSpinner);
 
         Spinner<Integer> count = new Spinner<>(1, 25, 5);
         //Oudom Pach OTP220001 11/12/2026 Revised batch count field to type in it.
@@ -216,7 +240,7 @@ public class EditorView {
         // If the database is connected and has words, generate an initial batch using real Markov probabilities
         if (!state.getWords().isEmpty()) {
             for (int i = 0; i < 5; i++) {
-                generated.add(state.generateMockSentence(starting.getText(), true));
+                generated.add(state.generateSentence(starting.getText(), false, 1.0f));
             }
         }
         render.run();
@@ -226,10 +250,15 @@ public class EditorView {
         Button generate = UIFactory.button("Generate Sentences", "primary", () -> {
             try {
                 count.commitValue();
+                tempSpinner.commitValue();
             } catch (Exception ignored) {}
             generated.clear();
+
+            boolean useTemp = "Temperature".equals(algorithm.getValue());
+            float tempVal = tempSpinner.getValue().floatValue();
+
             for (int i = 0; i < count.getValue(); i++) {
-                String sentence = state.generateMockSentence(starting.getText(), algorithm.getValue().startsWith("Weighted"));
+                String sentence = state.generateSentence(starting.getText(), useTemp, tempVal);
                 generated.add(sentence);
                 state.getHistory().add(new LogItem(sentence, UIFactory.now(), algorithm.getValue()));
                 if (selfIngest.isSelected()) state.selfIngestSentence(sentence);
@@ -239,7 +268,7 @@ public class EditorView {
         //Oudom Pach OTP220001 11/12/2026: Hbox to set alignment
         generate.setMinWidth(Region.USE_PREF_SIZE);
 
-        HBox controls = new HBox(10, algoBox, countBox, generate);
+        HBox controls = new HBox(10, algoBox, tempBox, countBox, generate);
         controls.setAlignment(Pos.BOTTOM_LEFT);
 
         ScrollPane list = new ScrollPane(batch);
