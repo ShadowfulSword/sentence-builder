@@ -74,10 +74,15 @@ public class DatabaseManager implements AutoCloseable {
         System.out.println("Successfully opened connection to DB");
     }
 
+    // Oudom Pach OTP220001 11/17/2026 Revised: Added protected no-arg constructor to enable unit testing and offline test doubles
+    protected DatabaseManager() {
+        this.conn = null;
+    }
+
     //AutoCloseable's close function overriden to close and inform the close
     @Override
     public void close() throws SQLException {
-        if(!conn.isClosed())
+        if(conn != null && !conn.isClosed())
             conn.close();
         System.out.println("Successfully closed connection to DB");
     }
