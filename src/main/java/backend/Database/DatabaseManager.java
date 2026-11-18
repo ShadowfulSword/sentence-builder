@@ -65,6 +65,10 @@ public class DatabaseManager implements AutoCloseable {
             + "FROM transitions t "
             + "WHERE t.word = ? "
             + "ORDER BY t.frequency DESC ";
+    //the typed prefix is bound to the placeholder. ESCAPE keeps a literal % or _ in that prefix from acting as a wildcard
+    private static final String WORD_PREFIX_GET = "SELECT word, total_frequency, start_frequency, end_frequency "
+            + "FROM words WHERE word LIKE ? ESCAPE '\\\\' "
+            + "ORDER BY total_frequency DESC LIMIT ?";
 
     //connection constructor takes in your url(see below). username and password of your DB connection
     //url takes the form of: "jdbc:mysql://hostname:port/database_name"
@@ -231,6 +235,26 @@ public class DatabaseManager implements AutoCloseable {
             e.getStackTrace();
             return null;
         }
+    }
+
+    //words that start with the bound prefix, most frequent first. likePrefix already contains the trailing wildcard
+    public List<WordData> findWordsByPrefix(String likePrefix, int limit) throws SQLException
+    {
+        List<WordData> matches = new ArrayList<>();
+        try (PreparedStatement ps = conn.prepareStatement(WORD_PREFIX_GET)) {
+            ps.setString(1, likePrefix);
+            ps.setInt(2, limit);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    matches.add(new WordData(
+                            rs.getString("word"),
+                            rs.getInt("total_frequency"),
+                            rs.getInt("start_frequency"),
+                            rs.getInt("end_frequency")));
+                }
+            }
+        }
+        return matches;
     }
 
 
