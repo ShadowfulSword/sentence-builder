@@ -4,10 +4,7 @@ package frontend;
 import backend.Database.DatabaseManager;
 import backend.Database.TransitionData;
 import backend.Database.WordData;
-import backend.Ingestion.CorpusTokenizer;
-import backend.Ingestion.DocumentMetadata;
-import backend.Ingestion.GutenbergIngestor;
-import backend.Ingestion.Token;
+import backend.Ingestion.*;
 import frontend.state.AppState;
 import frontend.state.AppState.CorpusItem;
 import frontend.views.EditorView;
@@ -184,43 +181,29 @@ public class MainApp extends Application {
                     }
 
                     updateMessage("Tokenizing & analyzing " + bookTitle + "...");
+
+                    //Ayush Kafley (axk220167) 11/17/2026: Updated to make use of the corpusRepository's helper methods
                     CorpusTokenizer tokenizer = new CorpusTokenizer(ingestor);
                     Map<String, WordData> words = new HashMap<>();
                     Map<String, TransitionData> transitions = new HashMap<>();
-                    Token prev = null;
-                    int totalWords = 0;
                     long totalBytes = meta.getSizeBytes() > 0 ? meta.getSizeBytes() : selected.length();
-
-                    while (tokenizer.hasNext()) {
-                        Token token = tokenizer.next();
-                        String word = token.getWord();
-                        if (word == null || word.isEmpty()) continue;
-                        totalWords++;
-
-                        WordData exists = words.get(word);
-                        if (exists == null) {
-                            words.put(word, new WordData(word, token.isStart(), token.isEnd()));
-                        } else {
-                            exists.addOccurrence(token.isStart(), token.isEnd());
-                        }
-
-                        if (prev != null && !prev.isEnd()) {
-                            String key = prev.getWord() + "\0" + word;
-                            TransitionData t = transitions.get(key);
-                            if (t == null) {
-                                transitions.put(key, new TransitionData(prev.getWord(), word));
-                            } else {
-                                t.addFrequency();
+                    //just pass the tokens untouched and update the progressbar
+                    Iterator<Token> tracked = new Iterator<>() {
+                        int seen = 0;
+                        public boolean hasNext() {return tokenizer.hasNext();}
+                        public Token next() {
+                            Token t = tokenizer.next();
+                            if(++seen %1000 == 0) {
+                                long bytesRead = ingestor.getBytesRead();
+                                updateProgress(bytesRead, totalBytes);
+                                updateMessage(String.format("Ingesting: %,d words (%,d KB)...", seen, bytesRead / 1024));
                             }
+                            return  t;
                         }
-                        prev = token;
 
-                        if (totalWords % 1000 == 0) {
-                            long bytesRead = ingestor.getBytesRead();
-                            updateProgress(bytesRead, totalBytes);
-                            updateMessage(String.format("Ingesting: %,d words (%,d KB)...", totalWords, bytesRead / 1024));
-                        }
-                    }
+                    };
+
+                    int totalWords = CorpusRepository.getTokens(tracked, words, transitions);
 
                     boolean savedToDb = false;
                     if (isDatabaseConnected && databaseManager != null) {

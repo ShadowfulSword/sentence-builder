@@ -4,6 +4,7 @@ package frontend.state;
 import backend.Database.DatabaseManager;
 import backend.Database.TransitionData;
 import backend.Database.WordData;
+import backend.Ingestion.TextSanitizer;
 import frontend.UIFactory;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
@@ -154,8 +155,9 @@ public class AppState {
 
     // Oudom Pach OTP220001 11/3/2026 Revised: Added self-ingestion to persist generated sentences to MySQL and UI state
     // Self-ingests a generated sentence into both the database (if connected) and in-memory collections
+    // Ayush Kafley axk220167 11/12/2026: revised to use TextSanitizer for consistency
     public void selfIngestSentence(String sentence) {
-        String clean = sentence.toLowerCase().replaceAll("[^\\p{L}\\p{N}' ]", " ").trim();
+        String clean = TextSanitizer.sanitize(sentence);
         if (clean.isEmpty()) return;
         String[] tokens = clean.split("\\s+");
         if (tokens.length == 0) return;

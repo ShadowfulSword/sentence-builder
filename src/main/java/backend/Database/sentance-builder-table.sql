@@ -5,7 +5,7 @@ CREATE DATABASE IF NOT EXISTS sentence_builder;
 USE sentence_builder;
 -- table to hold imported words
 -- one row per unique word found
-Create table words(
+Create table IF NOT EXISTS words(
                       word VARCHAR(255) PRIMARY KEY , -- word from the text, stored directly into the DB
                       total_frequency int not NULL,	-- how often a word appears in text, must always take in a value
                       start_frequency int  not null default 0 , -- how often a word is at the start of a sentence, if the col is left out in insert -> 0, cant accept null
@@ -14,7 +14,7 @@ Create table words(
 
 -- table to hold the transitions
 -- one row per one pair (word -> next word)
-Create table transitions(
+Create table IF NOT EXISTS transitions(
                             word VARCHAR(255), -- the first (from) word
                             next_word VARCHAR(255), -- the second (to) word
                             frequency int not null default 0,  -- how often we have one specific word transition x -> y
@@ -25,9 +25,17 @@ Create table transitions(
 
 -- table to hold the list of imported files, the name of the file, word count and import date
 -- one tow per text file imported, maps file id ot file name
-Create table imported_files(
+Create table IF NOT EXISTS imported_files(
                                file_id int Primary Key auto_increment,
                                filename VARCHAR(255) not null UNIQUE, -- unique to avoid importing the same text file multiple times
                                wordcount int not null default 0,	-- how many words are in this text file
                                import_date DATETIME DEFAULT NOW() not null	-- the date + time the text file was imported
+);
+
+--table to hold the full sentances that are self ingested and to be shown in the reports page
+CREATE TABLE IF NOT Exists generated_sentences(
+    sentance_id INT PRIMARY KEY AUTO_INCREMENT,
+    sentance TEXT not NULL, --generated sentence
+    algorithm VARCHAR(100) NOT NULL, --algo used
+    generated_at DATETIME DEFAULT NOW() NOT NULL -- date + time of text generated
 );

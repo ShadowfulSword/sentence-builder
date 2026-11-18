@@ -3,6 +3,7 @@
 package frontend.views;
 
 import backend.Database.DatabaseManager;
+import backend.Ingestion.TextSanitizer;
 import frontend.DbRunner;
 import frontend.UIFactory;
 import frontend.state.AppState;
@@ -42,6 +43,7 @@ public class EditorView {
         final String[] topWordForTab = new String[1];
 
         // The editor.text listener watches every character and predicts the next word when space is typed
+        //Ayush kafley axk220167 11/12/2026 updated so the lastword uses TextSanitizer's sanitize
         ContextMenu suggestions = new ContextMenu();
         editor.textProperty().addListener((o, old, value) -> {
             suggestions.hide();
@@ -53,9 +55,7 @@ public class EditorView {
 
                 if (!textBeforeCaret.isEmpty()) {
                     int lastSpace = textBeforeCaret.lastIndexOf(' ');
-                    String lastWord = (lastSpace == -1 ? textBeforeCaret : textBeforeCaret.substring(lastSpace + 1))
-                            .toLowerCase()
-                            .replaceAll("[^\\p{L}\\p{N}']", "");
+                    String lastWord = TextSanitizer.sanitize(lastSpace == -1 ? textBeforeCaret : textBeforeCaret.substring(lastSpace + 1));
 
                     Map<String, Integer> nextWords = state.getTransitions().get(lastWord);
                     if (nextWords != null && !nextWords.isEmpty()) {
