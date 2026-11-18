@@ -1,4 +1,4 @@
-// Oudom Pach OTP220001 11/17/2026 Issue #25: In-memory DatabaseManager test double for generative algorithm unit testing
+// Oudom Pach OTP220001 11/17/2026 In-memory DatabaseManager test double for generative algorithm unit testing
 package backend;
 
 import backend.Database.DatabaseManager;
@@ -10,10 +10,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * In-memory test double for DatabaseManager that provides word and transition data
- * to ProbabilisticGenerator and TemperatureGenerator without requiring a running MySQL instance.
- */
+// In-memory test double for DatabaseManager that provides word and transition data
+// to ProbabilisticGenerator and TemperatureGenerator without requiring a running MySQL instance.
 public class TestDatabaseManager extends DatabaseManager {
     private final Map<String, WordData> words = new HashMap<>();
     private final Map<String, List<TransitionData>> transitions = new HashMap<>();

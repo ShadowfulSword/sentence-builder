@@ -87,7 +87,7 @@ public class AppStateTest {
         assertTrue(defaultSentence.endsWith("."));
     }
 
-    // Oudom Pach OTP220001 11/17/2026 Issue #25: Test AppState.generateSentence delegation to Probabilistic and Temperature generators
+    // Oudom Pach OTP220001 11/17/2026 Revised: Test AppState.generateSentence delegation to Probabilistic and Temperature generators
     @Test
     void testGenerateSentenceDelegationAndFallback() {
         // When database is disconnected, generateSentence should fallback gracefully to mock generation

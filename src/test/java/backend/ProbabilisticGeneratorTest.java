@@ -1,4 +1,4 @@
-// Oudom Pach OTP220001 11/17/2026 Issue #25: Automated unit tests validating ProbabilisticGenerator algorithm and transition probabilities
+// Oudom Pach OTP220001 11/17/2026 Automated unit tests validating ProbabilisticGenerator algorithm and transition probabilities
 package backend;
 
 import backend.Database.TransitionData;
@@ -23,9 +23,7 @@ public class ProbabilisticGeneratorTest {
         generator = new ProbabilisticGenerator(db);
     }
 
-    /**
-     * Issue #25: Confirms that transition probabilities sum correctly to 1.0 (100%).
-     */
+    // Confirms that transition probabilities sum correctly to 1.0 (100%).
     @Test
     void testTransitionProbabilitiesSumToOne() {
         WordData currentWord = new WordData("the", 100, 20, 0);
@@ -51,10 +49,8 @@ public class ProbabilisticGeneratorTest {
         assertEquals(1.0, probabilitySum, 1e-6, "Transition probabilities must sum to 1.0");
     }
 
-    /**
-     * Issue #25: Validates that next-word selection statistically adheres to transition weights.
-     * Given transitions of 80% and 20%, sampling 10,000 words should select words within +/- 3% tolerance.
-     */
+    // Validates that next-word selection statistically adheres to transition weights.
+    // Given transitions of 80% and 20%, sampling 10,000 words should select words within +/- 3% tolerance.
     @Test
     void testProbabilisticSelectionMatchesRelativeWeights() {
         WordData currentWord = new WordData("quick", 100, 10, 0);
@@ -80,9 +76,7 @@ public class ProbabilisticGeneratorTest {
         assertEquals(0.20, silverPct, 0.03, "Option with weight 20 should be chosen ~20% of the time (+/- 3%)");
     }
 
-    /**
-     * When only one follower transition exists, it must be selected 100% of the time deterministically.
-     */
+    // When only one follower transition exists, it must be selected 100% of the time deterministically.
     @Test
     void testSingleTransitionIsDeterministic() {
         WordData word = new WordData("unique", 15, 2, 0);
@@ -95,9 +89,7 @@ public class ProbabilisticGeneratorTest {
         }
     }
 
-    /**
-     * Verifies safe null handling across edge cases (null word, missing transitions, empty frequency).
-     */
+    // Verifies safe null handling across edge cases (null word, missing transitions, empty frequency).
     @Test
     void testEdgeCasesReturnNullSafely() {
         // Null currentWord
@@ -120,9 +112,7 @@ public class ProbabilisticGeneratorTest {
         assertNull(generator.generateSentence("seed", 10));
     }
 
-    /**
-     * Verifies sentence formatting: starting capital letter, trailing period, and correct token joining.
-     */
+    // Verifies sentence formatting: starting capital letter, trailing period, and correct token joining.
     @Test
     void testGenerateSentenceFormattingAndPunctuation() {
         db.addWord(new WordData("the", 5, 5, 0));
@@ -140,9 +130,7 @@ public class ProbabilisticGeneratorTest {
         assertEquals("The sun rises.", sentence);
     }
 
-    /**
-     * Verifies natural sentence termination: once length exceeds 6 words and an end-frequency word is reached.
-     */
+    // Verifies natural sentence termination: once length exceeds 6 words and an end-frequency word is reached.
     @Test
     void testGenerateSentenceNaturalTerminationAfterSixWords() {
         // Build an 8-word linear chain where word 4 has end_frequency > 0, and word 7 has end_frequency > 0
@@ -164,9 +152,7 @@ public class ProbabilisticGeneratorTest {
         assertEquals("One two three four five six seven.", sentence);
     }
 
-    /**
-     * Verifies that sentence generation respects the max length parameter when no end word is encountered.
-     */
+    // Verifies that sentence generation respects the max length parameter when no end word is encountered.
     @Test
     void testGenerateSentenceRespectsMaximumLength() {
         // Cycle between "tick" and "tock" with 0 end frequency
@@ -183,9 +169,7 @@ public class ProbabilisticGeneratorTest {
         assertEquals(5, tokens.length);
     }
 
-    /**
-     * Verifies seed word sanitization: null/blank defaults to "it", multi-word seeds use the first token.
-     */
+    // Verifies seed word sanitization: null/blank defaults to "it", multi-word seeds use the first token.
     @Test
     void testSeedWordSanitization() {
         db.addWord(new WordData("it", 5, 5, 0));
@@ -204,9 +188,7 @@ public class ProbabilisticGeneratorTest {
         assertEquals("Hello.", sentenceMulti);
     }
 
-    /**
-     * Verifies that generation stops cleanly when reaching a word with no transitions without throwing exceptions.
-     */
+    // Verifies that generation stops cleanly when reaching a word with no transitions without throwing exceptions.
     @Test
     void testDeadEndTermination() {
         db.addWord(new WordData("start", 5, 5, 0));

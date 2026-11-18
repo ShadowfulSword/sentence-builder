@@ -1,4 +1,4 @@
-// Oudom Pach OTP220001 11/17/2026 Issue #25: Automated unit tests validating TemperatureGenerator scaling, greedy mode, and transition probabilities
+// Oudom Pach OTP220001 11/17/2026 Automated unit tests validating TemperatureGenerator scaling, greedy mode, and transition probabilities
 package backend;
 
 import backend.Database.TransitionData;
@@ -23,9 +23,7 @@ public class TemperatureGeneratorTest {
         generator = new TemperatureGenerator(db);
     }
 
-    /**
-     * Verifies initial default temperature is 1.0 and mutation via setter works as expected.
-     */
+    // Verifies initial default temperature is 1.0 and mutation via setter works as expected.
     @Test
     void testTemperatureGetterAndSetter() {
         assertEquals(1.0f, generator.getTemperature(), 1e-6);
@@ -37,10 +35,8 @@ public class TemperatureGeneratorTest {
         assertEquals(2.0f, generator.getTemperature(), 1e-6);
     }
 
-    /**
-     * Issue #25: Greedy mode at T <= 1e-4.
-     * When temperature is sufficiently low, it must deterministically select the top (highest frequency) token 100% of the time.
-     */
+    // Greedy mode at T <= 1e-4.
+    // When temperature is sufficiently low, it must deterministically select the top (highest frequency) token 100% of the time.
     @Test
     void testGreedySelectionAtExtremelyLowTemperature() {
         WordData word = new WordData("choose", 100, 10, 0);
@@ -59,9 +55,7 @@ public class TemperatureGeneratorTest {
         }
     }
 
-    /**
-     * Issue #25: Validates that transition probabilities sum correctly under various temperatures.
-     */
+    // Validates that transition probabilities sum correctly under various temperatures.
     @Test
     void testTemperatureProbabilitiesSumToOne() {
         WordData word = new WordData("base", 100, 10, 0);
@@ -102,10 +96,8 @@ public class TemperatureGeneratorTest {
         }
     }
 
-    /**
-     * Validates that increasing temperature (T > 1.0) flattens the probability distribution,
-     * increasing the likelihood of picking lower-frequency words compared to T = 1.0.
-     */
+    // Validates that increasing temperature (T > 1.0) flattens the probability distribution,
+    // increasing the likelihood of picking lower-frequency words compared to T = 1.0.
     @Test
     void testHighTemperatureFlattensDistribution() {
         WordData word = new WordData("path", 100, 10, 0);
@@ -139,10 +131,8 @@ public class TemperatureGeneratorTest {
                 String.format("High temperature (%.2f) should increase rare word rate compared to base (%.2f)", highRate, baseRate));
     }
 
-    /**
-     * Validates that lowering temperature (1e-4 < T < 1.0) sharpens the probability distribution,
-     * making the dominant word even more likely to be chosen compared to T = 1.0.
-     */
+    // Validates that lowering temperature (1e-4 < T < 1.0) sharpens the probability distribution,
+    // making the dominant word even more likely to be chosen compared to T = 1.0.
     @Test
     void testLowTemperatureSharpensDistribution() {
         WordData word = new WordData("lead", 100, 10, 0);
@@ -176,9 +166,7 @@ public class TemperatureGeneratorTest {
                 String.format("Low temperature (%.2f) should increase dominant word rate compared to base (%.2f)", lowDominantRate, baseDominantRate));
     }
 
-    /**
-     * Verifies deterministic sentence generation when greedy temperature is applied.
-     */
+    // Verifies deterministic sentence generation when greedy temperature is applied.
     @Test
     void testGreedyTemperatureProducesDeterministicSentences() {
         db.addWord(new WordData("the", 10, 10, 0));
@@ -200,9 +188,7 @@ public class TemperatureGeneratorTest {
         }
     }
 
-    /**
-     * Verifies null and empty handling in TemperatureGenerator.
-     */
+    // Verifies null and empty handling in TemperatureGenerator.
     @Test
     void testNullAndEmptyHandling() {
         assertNull(generator.getRandomNextWord(null));
