@@ -11,6 +11,7 @@ import frontend.state.AppState;
 import frontend.state.AppState.TransitionItem;
 import frontend.state.AppState.WordItem;
 import javafx.collections.FXCollections;
+import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
 import javafx.collections.transformation.FilteredList;
 import javafx.concurrent.Task;
@@ -109,6 +110,7 @@ public class VocabularyView {
             }
         };
 
+        state.getWords().addListener((ListChangeListener<WordItem>) c -> loadWords.run()); //reload on imports
         // Assemble the left panel containing the filter bar, sort dropdown, and vocabulary table
         VBox left = UIFactory.panel("Vocabulary explorer",
                 new HBox(10, search, new Label("Min Frequency ≥"), minimum),
@@ -133,7 +135,15 @@ public class VocabularyView {
         // Listener that triggers whenever the user clicks a word row in the left table
         // Oudom Pach OTP220001 11/08/26 Revised: Integrated DbRunner follower query with fallback to in-memory transitions map
         table.getSelectionModel().selectedItemProperty().addListener((o, a, w) -> {
-            if (w == null) return;
+            //clear the selected so we don't have stale data
+            if (w == null){
+             selected.setText("Select a word");
+             total.clear();
+             starts.clear();
+             ends.clear();
+             pairs.getItems().clear();
+             return;
+            }
             // Populate the text fields with the selected word's current stats
             selected.setText("Editing: " + w.text());
             total.setText("" + w.total());

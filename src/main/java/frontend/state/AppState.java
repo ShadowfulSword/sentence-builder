@@ -122,8 +122,20 @@ public class AppState {
     }
 
     // Merges newly ingested corpus data into in-memory collections and adds file to history
+    //Ayush Kafley axk220167 11/18/2026: Split to a helper function to ingestwords then add files to the list seperately
+    //for the use of selfIngest in EditorView which does not provide titles
     public void applyIngestedCorpus(String bookTitle, int totalWords, long sizeBytes,
                                     Collection<WordData> newWords, Collection<TransitionData> newTransitions) {
+
+        //call helper to ingest the words + transitions
+        applyIngestedWords(newWords, newTransitions);
+        // Add to imported files list
+        corpora.add(0, new CorpusItem(bookTitle, String.format("%,d words", totalWords), UIFactory.now()));
+    }
+
+    //Ayush Kafley axk220167: Helper function to merge words + transdition into in-memory collection; file ingestion handled in applyIngestedCorpus
+    //code copied/extracted straight from applyINgestedCorpus
+    public void applyIngestedWords(Collection<WordData> newWords, Collection<TransitionData> newTransitions){
         // Merge transitions
         for (TransitionData t : newTransitions) {
             transitions.computeIfAbsent(t.getWord(), k -> new HashMap<>())
@@ -148,9 +160,6 @@ public class AppState {
             updatedList.add(new WordItem(w, c[0], c[1], c[2], follows));
         });
         words.setAll(updatedList);
-
-        // Add to imported files list
-        corpora.add(0, new CorpusItem(bookTitle, String.format("%,d words", totalWords), UIFactory.now()));
     }
 
     // Oudom Pach OTP220001 11/3/2026 Revised: Added self-ingestion to persist generated sentences to MySQL and UI state
@@ -331,4 +340,6 @@ public class AppState {
         counts.forEach((w, c) -> updated.add(new WordItem(w, c[0], c[1], c[2], transitions.getOrDefault(w, Map.of()).size())));
         words.setAll(updated);
     }
+
+    //public void
 }

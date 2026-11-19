@@ -149,6 +149,9 @@ public class ReportsView {
               files.setAll(rows.stream().map(r -> new CorpusItem(r.filename(), String.valueOf(r.wordCount()), r.importDate().format(TIME_FORMAT))).toList());
           }, "Could not load imported files table: ");
         };
+        // reload the cards and files when words change
+        state.getWords().addListener((ListChangeListener<WordItem>) c -> loadReport.run());
+        state.getCorpora().addListener((ListChangeListener<CorpusItem>) c -> loadReport.run());
 
         //refresh the report after updates to the DB elsewehere
         Button refresh = UIFactory.button("Refresh from DB", "", loadReport);

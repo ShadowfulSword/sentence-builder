@@ -32,10 +32,11 @@ Create table IF NOT EXISTS imported_files(
                                import_date DATETIME DEFAULT NOW() not null	-- the date + time the text file was imported
 );
 
---table to hold the full sentances that are self ingested and to be shown in the reports page
+-- table to hold the full sentances that are self ingested and to be shown in the reports page
 CREATE TABLE IF NOT Exists generated_sentences(
     sentance_id INT PRIMARY KEY AUTO_INCREMENT,
-    sentance TEXT not NULL, --generated sentence
-    algorithm VARCHAR(100) NOT NULL, --algo used
+    sentence TEXT not NULL, -- generated sentence
+    algorithm VARCHAR(100) NOT NULL, -- algo used
+    self_ingested BOOLEAN NOT NULL DEFAULT FALSE, -- check for if it was self ingested so we can internally differencitate just in case
     generated_at DATETIME DEFAULT NOW() NOT NULL -- date + time of text generated
 );

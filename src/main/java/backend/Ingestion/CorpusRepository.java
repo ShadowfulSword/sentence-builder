@@ -84,16 +84,20 @@ public class CorpusRepository{
         return totalWords;
     }
 
+    //what defines a sentance so that caller can update the inmemory state
+    public record SentanceResult(int totalWords, Collection<WordData> words, Collection<TransitionData> transitions){}
+
     //ingest sentances (sanitize, tokenize, count and save words)
-    public static void ingestSentences(DatabaseManager db, List<String> sentences) throws SQLException {
+    public static SentanceResult ingestSentences(DatabaseManager db, List<String> sentences) throws SQLException {
         Map<String, WordData> words = new HashMap<>();
         Map<String, TransitionData> transitions = new HashMap<>();
 
         int totalWords = 0;
         for(String sentence : sentences)
             totalWords += getTokens(new CorpusTokenizer(sentence), words, transitions);
-        if(totalWords > 0)
+        if(totalWords > 0 && db != null)
             db.batchAdd(words.values(), transitions.values());
+        return new SentanceResult(totalWords, words.values(), transitions.values());
     }
 
     public static void main(String[] args){

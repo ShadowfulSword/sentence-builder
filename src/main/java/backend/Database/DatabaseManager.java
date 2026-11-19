@@ -12,6 +12,7 @@
 
 
 package backend.Database;
+import javax.print.DocFlavor;
 import javax.xml.transform.Result;
 import java.sql.*;
 import java.util.ArrayList;
@@ -468,4 +469,24 @@ public class DatabaseManager implements AutoCloseable {
             }
         }
     }
+
+    //Written by Ayush Kafley (axk220167) 11/18/2026
+    //batch add generated sentances
+    public void addGeneratedSentences(Collection<String> sentences, String algorithm, boolean isSelfIngested) throws SQLException{
+        String sql = "INSERT INTO generated_sentences (sentence, algorithm, self_ingested) VALUES (?, ? , ?)";
+        inTransaction(() ->{
+            try(PreparedStatement ps = conn.prepareStatement(sql)){
+                int n = 0;
+                for(String s : sentences){
+                    ps.setString(1, s);
+                    ps.setString(2, algorithm);
+                    ps.setBoolean(3, isSelfIngested);
+                    ps.addBatch();
+                    if(++n % BATCH_SIZE == 0)
+                        ps.executeBatch();
+                }
+                ps.executeBatch();
+            }
+        });
     }
+}

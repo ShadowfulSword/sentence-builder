@@ -3,6 +3,7 @@
 package frontend.views;
 
 import backend.Database.DatabaseManager;
+import backend.Ingestion.CorpusRepository;
 import backend.Ingestion.TextSanitizer;
 import frontend.DbRunner;
 import frontend.UIFactory;
@@ -15,6 +16,7 @@ import javafx.scene.control.*;
 import javafx.scene.input.KeyCode;
 import javafx.scene.layout.*;
 
+import java.sql.SQLException;
 import java.util.*;
 
 /* Tab 1:
@@ -196,14 +198,32 @@ public class EditorView {
 
         // Oudom Pach OTP220001 11/3/2026 Revised: Connected sentence generation to Markov algorithm and self-ingestion
         // Logic for generating sentences using the active algorithm
+        // Ayush Kafley axk220116 11/18/2026: updated self ingestion and saving to DB
         Button generate = UIFactory.button("Generate Sentences", "primary", () -> {
             generated.clear();
             for (int i = 0; i < count.getValue(); i++) {
                 String sentence = state.generateMockSentence(starting.getText(), algorithm.getValue().startsWith("Weighted"));
                 generated.add(sentence);
                 state.getHistory().add(new LogItem(sentence, UIFactory.now(), algorithm.getValue()));
-                if (selfIngest.isSelected()) state.selfIngestSentence(sentence);
             }
+            //save to the DB
+            List<String> batchSentence = new ArrayList<>(generated);
+            String algo = algorithm.getValue();
+            boolean ingest = selfIngest.isSelected();
+            if(state.isDatabaseConnected()){
+                dbRunner.rundb(db -> {
+                    db.addGeneratedSentences(batchSentence, algo, ingest);
+                    return ingest ? CorpusRepository.ingestSentences(db, batchSentence) : null;
+                }, result -> {
+                    if(result == null || result.totalWords() == 0){
+                        state.setStatus("Saved " + batchSentence.size() + " generated Sentances");
+                        return;
+                    }
+                    state.applyIngestedWords(result.words(), result.transitions());
+                    state.setStatus("Saved " + batchSentence.size() + batchSentence.size() + " generated sentences ");
+                }, "Could not save generated sentances: ");
+            } else if (ingest)
+                selfIngest(batchSentence); //pass to save offline in memory
             render.run();
         });
         generate.setMaxWidth(Double.MAX_VALUE);
@@ -239,5 +259,26 @@ public class EditorView {
     private void appendToEditor(String sentence) {
         editor.appendText((editor.getText().endsWith(" ") || editor.getText().isEmpty() ? "" : " ") + sentence + " ");
         state.setStatus("Added to composition");
+    }
+
+    //helper method to hand the generated sentances to the runner then update memory on successful saves
+    private void selfIngest(List<String> sentances) {
+        if(state.isDatabaseConnected()){
+            dbRunner.rundb(db -> CorpusRepository.ingestSentences(db, sentances), result -> {
+                if(result.totalWords() == 0)
+                    return;
+                state.applyIngestedWords(result.words(), result.transitions());
+                state.setStatus("Self-ingested " + result.totalWords() + " words into the Database");
+            }, "Could not self-ingest: ");
+        } else {
+            //if no DB then keep it in memory only
+            try {
+                CorpusRepository.SentanceResult result = CorpusRepository.ingestSentences(null, sentances);
+                state.applyIngestedWords(result.words(), result.transitions());
+                state.setStatus(("Self-ingested " + result.totalWords() + " words into the Database"));
+            } catch (SQLException e){
+                state.setStatus("Could not self-ingest: " + e.getMessage());
+            }
+        }
     }
 }
