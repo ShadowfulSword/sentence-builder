@@ -1,6 +1,7 @@
 // Oudom Pach OTP220001 10/20/2026 Initial Creation: Composition text editor and sentence generator tab
 // Ayush Kafley axk220167 11/05/2026 Revised: Integrated DbRunner for database-driven random word selection
 // Andrew Park AXP220253 11/16/2026 Revised: Implemented spinner UI for temperature algo driven sentence gen
+// Oudom Pach OTP220001 11/19/26 Revised: Bug fix to remove trailing space when inserting suggested word
 package frontend.views;
 
 import backend.Database.DatabaseManager;
@@ -76,8 +77,9 @@ public class EditorView {
                             double pct = (entry.getValue() * 100.0) / Math.max(1, totalSum);
 
                             MenuItem item = new MenuItem(String.format("%d.  %-15s (%4.1f%%)", i + 1, choice, pct));
+                            // Oudom Pach OTP220001 11/19/26 Bug fix: Removed extra trailing space after inserted suggested word
                             item.setOnAction(e -> {
-                                editor.insertText(editor.getCaretPosition(), choice + " ");
+                                editor.insertText(editor.getCaretPosition(), choice);
                                 suggestions.hide();
                             });
                             suggestions.getItems().add(item);
@@ -88,12 +90,13 @@ public class EditorView {
             }
         });
 
+        // Oudom Pach OTP220001 11/19/26 Bug fix: Removed extra trailing space on TAB auto-complete
         // Listens for TAB when suggestions are open to accept the top word; ESC dismisses
         editor.setOnKeyPressed(e -> {
             if (e.getCode() == KeyCode.TAB && suggestions.isShowing() && topWordForTab[0] != null) {
                 e.consume();
                 suggestions.hide();
-                editor.insertText(editor.getCaretPosition(), topWordForTab[0] + " ");
+                editor.insertText(editor.getCaretPosition(), topWordForTab[0]);
             } else if (e.getCode() == KeyCode.ESCAPE) {
                 suggestions.hide();
             }
