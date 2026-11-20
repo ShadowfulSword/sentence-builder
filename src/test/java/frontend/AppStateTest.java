@@ -86,4 +86,36 @@ public class AppStateTest {
         assertTrue(defaultSentence.startsWith("It"));
         assertTrue(defaultSentence.endsWith("."));
     }
+
+    // Oudom Pach OTP220001 11/17/2026 Issue #25: Test AppState.generateSentence delegation to Probabilistic and Temperature generators
+    @Test
+    void testGenerateSentenceDelegationAndFallback() {
+        // When database is disconnected, generateSentence should fallback gracefully to mock generation
+        String sentenceFallbackProb = state.generateSentence("whale", false, 1.0f);
+        assertNotNull(sentenceFallbackProb);
+        assertTrue(sentenceFallbackProb.startsWith("Whale"));
+        assertTrue(sentenceFallbackProb.endsWith("."));
+
+        String sentenceFallbackTemp = state.generateSentence("whale", true, 0.5f);
+        assertNotNull(sentenceFallbackTemp);
+        assertTrue(sentenceFallbackTemp.startsWith("Whale"));
+        assertTrue(sentenceFallbackTemp.endsWith("."));
+
+        // When connected to TestDatabaseManager
+        backend.TestDatabaseManager testDb = new backend.TestDatabaseManager();
+        testDb.addWord(new WordData("whale", 10, 5, 0));
+        testDb.addWord(new WordData("ocean", 5, 0, 5));
+        testDb.addTransition("whale", "ocean", 4);
+
+        state.setDatabaseManager(testDb);
+        String sentenceDb = state.generateSentence("whale", false, 1.0f);
+        assertNotNull(sentenceDb);
+        assertTrue(sentenceDb.startsWith("Whale"));
+        assertTrue(sentenceDb.endsWith("."));
+
+        String sentenceDbTemp = state.generateSentence("whale", true, 0.0001f);
+        assertNotNull(sentenceDbTemp);
+        assertTrue(sentenceDbTemp.startsWith("Whale"));
+        assertTrue(sentenceDbTemp.endsWith("."));
+    }
 }
