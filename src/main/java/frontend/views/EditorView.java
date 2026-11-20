@@ -4,6 +4,7 @@ package frontend.views;
 
 import backend.Database.DatabaseManager;
 import backend.Ingestion.CorpusRepository;
+import backend.Ingestion.GutenbergIngestor;
 import backend.Ingestion.TextSanitizer;
 import frontend.DbRunner;
 import frontend.UIFactory;
@@ -136,6 +137,9 @@ public class EditorView {
 
             char c = newV.charAt(i);
             if(c == '.' || c == '!' || c == '?'){
+                //check if . means abbriviations and not end of sentence
+                if(c == '.' && endsWithAbb(newV, i))
+                    return;
                 String sentence = newV.substring(ingestedUpTo[0], i + 1); //mark new sentane -> since last ingested
                 ingestedUpTo[0] = i + 1;
                 if(!sentence.isBlank())
@@ -325,5 +329,14 @@ public class EditorView {
                 state.setStatus("Could not self-ingest: " + e.getMessage());
             }
         }
+    }
+
+    //helper method to check if the period belongs to a abbrivation
+    private static boolean endsWithAbb(String text, int index){
+        int start = index;
+        while(start > 0 && !Character.isWhitespace(text.charAt(start - 1)))
+            start --;
+        String word = text.substring(start, index).toLowerCase(Locale.ROOT);
+        return GutenbergIngestor.ABBREVIATIONS.contains(word);
     }
 }

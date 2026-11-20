@@ -40,7 +40,7 @@ public class GutenbergIngestor implements AutoCloseable {
     //Regex patterns used to ensure paragraphs are valid in grabSentence() method
     private final Pattern punctuationPattern = Pattern.compile("[.!?;]");
 
-    private static final Set<String> ABBREVIATIONS = new HashSet<>(Arrays.asList(
+    public static final Set<String> ABBREVIATIONS = new HashSet<>(Arrays.asList(
             "mr", "mrs", "ms", "dr", "prof", "sr", "jr",
             "vs", "etc", "ie", "eg", "inc", "ltd", "co"
     ));
