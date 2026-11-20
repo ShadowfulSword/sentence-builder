@@ -116,7 +116,7 @@ public class ReportsView {
 
         // Make columns fit the table width and give the sentence column extra space
         log.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
-        log.getColumns().get(0).setPrefWidth(560);
+        log.getColumns().get(0).setPrefWidth(200);
         // Refresh the table and re-apply filters whenever a new sentence is generated in Tab 1
         state.getHistory().addListener((ListChangeListener<LogItem>) c -> {
             filter.run();
@@ -130,11 +130,13 @@ public class ReportsView {
 
         // Bottom table displaying all imported .txt corpus files, word counts, and timestamps
         TableView<CorpusItem> filesTable = new TableView<>(files);
-        UIFactory.column(filesTable, "Imported Project Gutenberg / .txt file", CorpusItem::file);
-        UIFactory.column(filesTable, "Words contributed", CorpusItem::count);
-        UIFactory.column(filesTable, "Import timestamp", CorpusItem::time);
+        UIFactory.column(filesTable, "Imported Corpus", CorpusItem::file);
+        UIFactory.column(filesTable, "Word Count", CorpusItem::count);
+        UIFactory.column(filesTable, "Timestamp", CorpusItem::time);
         filesTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
         filesTable.setPrefHeight(140);
+        filesTable.getColumns().get(1).setPrefWidth(50);
+        filesTable.getColumns().get(2).setPrefWidth(100);
 
         //load the 3 top fields and the bottom tables
         Runnable loadReport = () -> {
@@ -153,9 +155,15 @@ public class ReportsView {
         //refresh the report after updates to the DB elsewehere
         Button refresh = UIFactory.button("Refresh from DB", "", loadReport);
 
+
         // Stack the KPI cards, sentence history panel, and imported files panel vertically
-        VBox content = new VBox(18, kpis, logs, UIFactory.panel("Imported corpus files", refresh, filesTable));
-        VBox.setVgrow(logs, Priority.ALWAYS);
+        VBox ImportRecord =  UIFactory.panel("Imported corpus files", refresh, filesTable);
+        VBox.setVgrow(filesTable, Priority.ALWAYS);
+        SplitPane tables = new SplitPane( logs, ImportRecord );
+        tables.setDividerPositions(.65f);
+
+        VBox content = new VBox(18, kpis, tables );
+        VBox.setVgrow(tables, Priority.ALWAYS);
 
         //fill the report on build
         loadReport.run();
