@@ -5,6 +5,7 @@
 package frontend.views;
 
 import backend.Database.DatabaseManager;
+import backend.Database.TransitionData;
 import frontend.DbRunner;
 import frontend.UIFactory;
 import frontend.state.AppState;
@@ -44,6 +45,11 @@ public class EditorView {
         // Holds the top suggested word so typing TAB automatically chooses it
         final String[] topWordForTab = new String[1];
 
+        ComboBox<String> algorithm = new ComboBox<>(FXCollections.observableArrayList("Weighted Probabilistic", "Temperature"));
+        algorithm.getSelectionModel().selectFirst();
+        algorithm.setMaxWidth(Double.MAX_VALUE);
+
+
         // The editor.text listener watches every character and predicts the next word when space is typed
         ContextMenu suggestions = new ContextMenu();
         editor.textProperty().addListener((o, old, value) -> {
@@ -60,21 +66,25 @@ public class EditorView {
                             .toLowerCase()
                             .replaceAll("[^\\p{L}\\p{N}']", "");
 
-                    Map<String, Integer> nextWords = state.getTransitions().get(lastWord);
+                    ArrayList<TransitionData> nextWords = state.getTransitions("Temperature".equals(algorithm.getValue()), lastWord);
                     if (nextWords != null && !nextWords.isEmpty()) {
                         suggestions.getItems().clear();
 
-                        int totalSum = nextWords.values().stream().mapToInt(Integer::intValue).sum();
-                        List<Map.Entry<String, Integer>> sorted = new ArrayList<>(nextWords.entrySet());
-                        sorted.sort((a, b) -> Integer.compare(b.getValue(), a.getValue()));
+                        long totalSum = 0;
+                        for(TransitionData t : nextWords)
+                            totalSum += t.getFrequency();
 
-                        topWordForTab[0] = sorted.get(0).getKey();
-                        int limit = Math.min(5, sorted.size());
+                        System.out.println(totalSum);
+
+
+                        topWordForTab[0] = nextWords.get(0).getNextWord();
+                        int limit = Math.min(5, nextWords.size());
 
                         for (int i = 0; i < limit; i++) {
-                            Map.Entry<String, Integer> entry = sorted.get(i);
-                            String choice = entry.getKey();
-                            double pct = (entry.getValue() * 100.0) / Math.max(1, totalSum);
+                            TransitionData entry = nextWords.get(i);
+                            String choice = entry.getNextWord();
+                            System.out.println(choice + " " + entry.getFrequency());
+                            double pct = (entry.getFrequency() * 100.0) / Math.max(1, totalSum);
 
                             MenuItem item = new MenuItem(String.format("%d.  %-15s (%4.1f%%)", i + 1, choice, pct));
                             // Oudom Pach OTP220001 11/19/26 Bug fix: Removed extra trailing space after inserted suggested word
@@ -155,11 +165,8 @@ public class EditorView {
         startRow.setAlignment(Pos.CENTER_LEFT);
         HBox.setHgrow(starting, Priority.ALWAYS);
 
-        ComboBox<String> algorithm = new ComboBox<>(FXCollections.observableArrayList("Weighted Probabilistic", "Temperature"));
-        algorithm.getSelectionModel().selectFirst();
-        algorithm.setMaxWidth(Double.MAX_VALUE);
 
-        Spinner<Double> tempSpinner = new Spinner<>(0.1, 2.5, 1.0, 0.1);
+        Spinner<Double> tempSpinner = new Spinner<>(0, 5, 1.0, 0.1);
         tempSpinner.setEditable(true);
         tempSpinner.setPrefWidth(75);
         tempSpinner.setMinWidth(65);
@@ -174,6 +181,7 @@ public class EditorView {
             if (!isNowFocused) {
                 try {
                     tempSpinner.commitValue();
+                    state.setTemperature(tempSpinner.getValue());
                 } catch (Exception ex) {
                     tempSpinner.getValueFactory().setValue(1.0);
                     tempSpinner.getEditor().setText("1.0");

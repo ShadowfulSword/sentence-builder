@@ -77,7 +77,14 @@ public class AppState {
     public ObservableList<WordItem> getWords() { return words; }
     public ObservableList<LogItem> getHistory() { return history; }
     public ObservableList<CorpusItem> getCorpora() { return corpora; }
-    public Map<String, Map<String, Integer>> getTransitions() { return transitions; }
+    public Map<String, Map<String, Integer>> getTransitions() {return transitions;}
+    public ArrayList<TransitionData> getTransitions(Boolean isTemp, String currentWord) {
+        if(isTemp)
+            return tempGenerator.getTransitions(new WordData(currentWord));
+        else
+            return probGenerator.getTransitions(new WordData(currentWord));
+    }
+    public void setTemperature(double temperature) {tempGenerator.setTemperature((float)temperature);}
     public StringProperty statusTextProperty() { return statusText; }
     // Updates the footer status bar message across the application
     public void setStatus(String message) { statusText.set(message); }
