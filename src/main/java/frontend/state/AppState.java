@@ -6,6 +6,8 @@ import backend.Database.TransitionData;
 import backend.Database.WordData;
 import backend.Ingestion.TextSanitizer;
 import frontend.UIFactory;
+import javafx.beans.property.IntegerProperty;
+import javafx.beans.property.SimpleIntegerProperty;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
 import javafx.collections.FXCollections;
@@ -341,5 +343,8 @@ public class AppState {
         words.setAll(updated);
     }
 
-    //public void
+    //using intgegerProtperty lets us auto update on changes
+    private final IntegerProperty dataVersion = new SimpleIntegerProperty(0);
+    public IntegerProperty dataVersionProperty() {return dataVersion;} //check for what version we're at (cross checking)
+    public void notifiDataChanged() {dataVersion.set(dataVersion.get() + 1);} //signal an upadte
 }

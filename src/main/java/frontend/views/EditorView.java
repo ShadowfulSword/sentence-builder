@@ -10,6 +10,7 @@ import frontend.UIFactory;
 import frontend.state.AppState;
 import frontend.state.AppState.LogItem;
 import javafx.collections.FXCollections;
+import javafx.collections.ListChangeListener;
 import javafx.geometry.Side;
 import javafx.scene.Node;
 import javafx.scene.control.*;
@@ -96,6 +97,49 @@ public class EditorView {
                 editor.insertText(editor.getCaretPosition(), topWordForTab[0] + " ");
             } else if (e.getCode() == KeyCode.ESCAPE) {
                 suggestions.hide();
+            }
+        });
+
+        //written by Ayush Kafley (axk220167)
+        //ingest a full sentence once the user finishes it with (./!/?)
+        final int[] ingestedUpTo = {0};
+        editor.textProperty().addListener((o, oldV, newV) ->{
+            if(newV == null){
+                ingestedUpTo[0] = 0;
+                return;
+            }
+
+            //text changed via add to text or clear
+            if(!editor.isFocused()){
+                ingestedUpTo[0] = newV.length();
+                return;
+            }
+
+            //text was delteted
+            if(newV.length() < ingestedUpTo[0])
+                ingestedUpTo[0] = newV.length();
+
+            //single char typed
+            if(oldV == null || newV.length() != oldV.length() + 1)
+                return;
+
+            //where was the char inserted
+            int i = 0;
+            while((i < oldV.length()) && (oldV.charAt(i) == newV.charAt(i)))
+                i++;
+
+            //added char was inside already ingested sentence -> change the marker
+            if(i < ingestedUpTo[0]){
+                ingestedUpTo[0] ++;
+                return;
+            }
+
+            char c = newV.charAt(i);
+            if(c == '.' || c == '!' || c == '?'){
+                String sentence = newV.substring(ingestedUpTo[0], i + 1); //mark new sentane -> since last ingested
+                ingestedUpTo[0] = i + 1;
+                if(!sentence.isBlank())
+                    selfIngest(List.of(sentence));
             }
         });
 
@@ -215,6 +259,7 @@ public class EditorView {
                     db.addGeneratedSentences(batchSentence, algo, ingest);
                     return ingest ? CorpusRepository.ingestSentences(db, batchSentence) : null;
                 }, result -> {
+                    state.notifiDataChanged(); //signal that the generated sentances have been added to the DB for report
                     if(result == null || result.totalWords() == 0){
                         state.setStatus("Saved " + batchSentence.size() + " generated Sentances");
                         return;

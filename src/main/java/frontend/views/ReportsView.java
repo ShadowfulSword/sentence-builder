@@ -4,6 +4,7 @@ package frontend.views;
 
 import backend.Database.DatabaseManager;
 import frontend.DbRunner;
+import frontend.MainApp;
 import frontend.UIFactory;
 import frontend.state.AppState;
 import frontend.state.AppState.CorpusItem;
@@ -19,6 +20,7 @@ import javafx.scene.layout.*;
 
 import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.Map;
 
 /*
@@ -34,6 +36,9 @@ public class ReportsView {
     private final DbRunner dbRunner;
     //imported files at thte bottom table
     private final ObservableList<CorpusItem> files = FXCollections.observableArrayList();
+    //generated sentence history in the generated sentences table
+    private final ObservableList<LogItem> history = FXCollections.observableArrayList();
+    private final Map<String, Long> counts = new HashMap<>(); //freq counter to avoid recounts
     //formatter for imported time stamp
     private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("MMM d, yyyy h:mm a");
 
@@ -42,6 +47,8 @@ public class ReportsView {
         this.state = state;
         this.dbRunner = new DbRunner(state);
     }
+
+    private long occurences(String sentence){return counts.getOrDefault(sentence, 0L);}
 
     // Builds and returns the complete JavaFX layout for the Reports & Duplicate Audit tab
     public Node build() {
@@ -53,8 +60,8 @@ public class ReportsView {
 
         // Calculate and update the duplicate rate
         Runnable updateMetrics = () -> {
-           long unique = state.getHistory().stream().map(LogItem::sentence).distinct().count();
-           int hist = state.getHistory().size();
+           long unique = history.stream().map(LogItem::sentence).distinct().count();
+           int hist = history.size();
            duplicateRate.setText(String.format("%.1f%%", hist == 0 ? 0 : 100.00 * (hist - unique) / hist));
         };
         updateMetrics.run(); // Calculate initial KPI values on startup
@@ -81,11 +88,11 @@ public class ReportsView {
         // Checkbox to toggle showing only sentences that were generated more than once
         CheckBox onlyDuplicates = new CheckBox("Filter: Show Duplicates Only");
         // Wrap the history list in a FilteredList so we can search/filter without deleting log entries
-        FilteredList<LogItem> filtered = new FilteredList<>(state.getHistory());
+        FilteredList<LogItem> filtered = new FilteredList<>(history);
         // Define the filter condition: sentence must match search text AND (if checked) appear > 1 time
         Runnable filter = () -> filtered.setPredicate(l ->
                 l.sentence().toLowerCase().contains(search.getText().toLowerCase()) &&
-                        (!onlyDuplicates.isSelected() || state.countOccurrences(l.sentence()) > 1));
+                        (!onlyDuplicates.isSelected() || occurences(l.sentence()) > 1));
         // Re-run the filter whenever the user types in the search bar or toggles the checkbox
         search.textProperty().addListener((o, a, b) -> filter.run());
         onlyDuplicates.setOnAction(e -> filter.run());
@@ -97,7 +104,7 @@ public class ReportsView {
         UIFactory.column(log, "Algorithm", LogItem::algorithm);
         // Status column dynamically checks how many times each sentence appears in the history log
         TableColumn<LogItem, String> statusColumn = UIFactory.column(log, "Status",
-                l -> state.countOccurrences(l.sentence()) > 1
+                l -> occurences(l.sentence()) > 1
                         ? "Duplicate (Generated " + state.countOccurrences(l.sentence()) + "x)"
                         : "Unique");
 
@@ -117,8 +124,12 @@ public class ReportsView {
         // Make columns fit the table width and give the sentence column extra space
         log.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
         log.getColumns().get(0).setPrefWidth(560);
-        // Refresh the table and re-apply filters whenever a new sentence is generated in Tab 1
-        state.getHistory().addListener((ListChangeListener<LogItem>) c -> {
+        //whenever the local history changes build the table
+        history.addListener((ListChangeListener<LogItem>) c -> {
+            counts.clear();
+            for(LogItem l : history)
+                counts.merge(l.sentence(), 1L, Long::sum);
+            updateMetrics.run();
             filter.run();
             log.refresh();
         });
@@ -136,23 +147,44 @@ public class ReportsView {
         filesTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
         filesTable.setPrefHeight(140);
 
-        //load the 3 top fields and the bottom tables
+        //load the 3 top fields and the bottom tables from DB when DB is connected, from AppState when it is not
         Runnable loadReport = () -> {
-          state.setStatus("Loading report from the DB...");
-          dbRunner.rundb(DatabaseManager::getCorpusStats, stats -> {
-              vocabulary.setText(String.valueOf(stats.words()));
-              bigrams.setText(String.valueOf(stats.transitions()));
-              frequent.setText(stats.topStartWord() == null ? "N/A" : stats.topStartWord());
-          }, "Could not load the stats: ");
+            if(state.isDatabaseConnected()) {
+                state.setStatus("Loading report from the DB...");
+                dbRunner.rundb(DatabaseManager::getCorpusStats, stats -> {
+                    vocabulary.setText(String.valueOf(stats.words()));
+                    bigrams.setText(String.valueOf(stats.transitions()));
+                    frequent.setText(stats.topStartWord() == null ? "N/A" : stats.topStartWord());
+                }, "Could not load the stats: ");
 
-          dbRunner.rundb(DatabaseManager::getImportedFiles, rows -> {
-              files.setAll(rows.stream().map(r -> new CorpusItem(r.filename(), String.valueOf(r.wordCount()), r.importDate().format(TIME_FORMAT))).toList());
-          }, "Could not load imported files table: ");
+                dbRunner.rundb(DatabaseManager::getImportedFiles, rows -> {
+                    files.setAll(rows.stream().map(r -> new CorpusItem(r.filename(), String.valueOf(r.wordCount()), r.importDate().format(TIME_FORMAT))).toList());
+                }, "Could not load imported files table: ");
+
+                dbRunner.rundb(DatabaseManager::getGeneratedSentences, rows -> {
+                    history.setAll(rows.stream().map(r -> new LogItem(r.sentence(), r.generatedAt().format(TIME_FORMAT), r.algorithm())).toList());
+                }, "Could not load generated sentences");
+            } else {
+                vocabulary.setText(String.valueOf(state.getWords().size()));
+                bigrams.setText(String.valueOf(state.getTransitions().values().stream().mapToInt(Map::size).sum()));
+                frequent.setText(state.getWords().stream()
+                        .max(Comparator.comparingInt(WordItem::starts))
+                        .map(WordItem::text).orElse("N/A"));
+                files.setAll(state.getCorpora());
+                history.setAll(state.getHistory());
+            }
         };
         // reload the cards and files when words change
         state.getWords().addListener((ListChangeListener<WordItem>) c -> loadReport.run());
         state.getCorpora().addListener((ListChangeListener<CorpusItem>) c -> loadReport.run());
+        //reload after generated scentences are stored and signal recieved from editor
+        state.dataVersionProperty().addListener((o, oldV, newV) -> loadReport.run());
+        //for offlien keep local history in sync
+        state.getHistory().addListener((ListChangeListener<LogItem>) c -> {
+            if(!state.isDatabaseConnected())
+                history.setAll(state.getHistory());
 
+        });
         //refresh the report after updates to the DB elsewehere
         Button refresh = UIFactory.button("Refresh from DB", "", loadReport);
 

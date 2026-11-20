@@ -489,4 +489,18 @@ public class DatabaseManager implements AutoCloseable {
             }
         });
     }
+
+    //Written by Ayush Kafley (axk220167) 11/19/2026
+    //get all generated sentences sorted by newest for the generated sentences column
+    public List<GeneratedScentenceRow> getGeneratedSentences() throws SQLException{
+        List<GeneratedScentenceRow> rows = new ArrayList<>();
+        String query = "SELECT sentence, algorithm, generated_at FROM generated_sentences ORDER BY generated_at DESC, sentence_id DESC";
+        try (Statement s = conn.createStatement()) {
+            try (ResultSet rs = s.executeQuery(query)) {
+                while (rs.next())
+                    rows.add(new GeneratedScentenceRow(rs.getString(1), rs.getString(2), rs.getTimestamp(3).toLocalDateTime()));
+            }
+        }
+        return  rows;
+    }
 }

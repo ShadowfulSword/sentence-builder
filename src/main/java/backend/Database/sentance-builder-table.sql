@@ -34,7 +34,7 @@ Create table IF NOT EXISTS imported_files(
 
 -- table to hold the full sentances that are self ingested and to be shown in the reports page
 CREATE TABLE IF NOT Exists generated_sentences(
-    sentance_id INT PRIMARY KEY AUTO_INCREMENT,
+    sentence_id INT PRIMARY KEY AUTO_INCREMENT,
     sentence TEXT not NULL, -- generated sentence
     algorithm VARCHAR(100) NOT NULL, -- algo used
     self_ingested BOOLEAN NOT NULL DEFAULT FALSE, -- check for if it was self ingested so we can internally differencitate just in case
