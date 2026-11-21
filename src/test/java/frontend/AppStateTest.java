@@ -3,10 +3,12 @@ package frontend;
 
 import backend.Database.TransitionData;
 import backend.Database.WordData;
+import backend.Ingestion.CorpusRepository;
 import frontend.state.AppState;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.sql.SQLException;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -42,9 +44,13 @@ public class AppStateTest {
     }
 
     @Test
-    void testSelfIngestSentenceUpdatesWordsAndTransitions() {
-        String sentence = "Whales swim fast.";
-        state.selfIngestSentence(sentence);
+    void testSelfIngestSentenceUpdatesWordsAndTransitions() throws SQLException {
+        List<String> sentence = List.of("Whales swim fast.");
+
+        //updated after reworking selfIngest
+        CorpusRepository.SentanceResult result = CorpusRepository.ingestSentences(null, sentence);
+        state.applyIngestedWords(result.words(), result.transitions());
+        assertEquals(3, result.totalWords());
 
         assertTrue(state.getWords().stream().anyMatch(w -> w.text().equals("whales")));
         assertTrue(state.getWords().stream().anyMatch(w -> w.text().equals("swim")));
