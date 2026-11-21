@@ -1,5 +1,7 @@
 // Oudom Pach OTP220001 10/20/2026 Initial Creation: Composition text editor and sentence generator tab
 // Ayush Kafley axk220167 11/05/2026 Revised: Integrated DbRunner for database-driven random word selection
+// Andrew Park AXP220253 11/16/2026 Revised: Implemented spinner UI for temperature algo driven sentence gen
+// Oudom Pach OTP220001 11/19/26 Revised: Bug fix to remove trailing space when inserting suggested word
 package frontend.views;
 
 import backend.Database.DatabaseManager;
@@ -11,6 +13,7 @@ import frontend.UIFactory;
 import frontend.state.AppState;
 import frontend.state.AppState.LogItem;
 import javafx.collections.FXCollections;
+import javafx.geometry.Pos;
 import javafx.collections.ListChangeListener;
 import javafx.geometry.Side;
 import javafx.scene.Node;
@@ -78,8 +81,9 @@ public class EditorView {
                             double pct = (entry.getValue() * 100.0) / Math.max(1, totalSum);
 
                             MenuItem item = new MenuItem(String.format("%d.  %-15s (%4.1f%%)", i + 1, choice, pct));
+                            // Oudom Pach OTP220001 11/19/26 Bug fix: Removed extra trailing space after inserted suggested word
                             item.setOnAction(e -> {
-                                editor.insertText(editor.getCaretPosition(), choice + " ");
+                                editor.insertText(editor.getCaretPosition(), choice);
                                 suggestions.hide();
                             });
                             suggestions.getItems().add(item);
@@ -90,12 +94,13 @@ public class EditorView {
             }
         });
 
+        // Oudom Pach OTP220001 11/19/26 Bug fix: Removed extra trailing space on TAB auto-complete
         // Listens for TAB when suggestions are open to accept the top word; ESC dismisses
         editor.setOnKeyPressed(e -> {
             if (e.getCode() == KeyCode.TAB && suggestions.isShowing() && topWordForTab[0] != null) {
                 e.consume();
                 suggestions.hide();
-                editor.insertText(editor.getCaretPosition(), topWordForTab[0] + " ");
+                editor.insertText(editor.getCaretPosition(), topWordForTab[0]);
             } else if (e.getCode() == KeyCode.ESCAPE) {
                 suggestions.hide();
             }
@@ -172,7 +177,9 @@ public class EditorView {
                 .max(Comparator.comparingInt(AppState.WordItem::starts))
                 .map(AppState.WordItem::text)
                 .orElse("it");
-        String formattedStart = Character.toUpperCase(defaultStartingWord.charAt(0)) + defaultStartingWord.substring(1);
+        String formattedStart = (defaultStartingWord == null || defaultStartingWord.isEmpty())
+                ? "It"
+                : Character.toUpperCase(defaultStartingWord.charAt(0)) + defaultStartingWord.substring(1);
 
         TextField starting = new TextField(formattedStart);
         starting.setPromptText("Starting word");
@@ -191,32 +198,69 @@ public class EditorView {
                 starting.setText(Character.toUpperCase(picked.charAt(0)) + picked.substring(1));
             }
         });
-
-        HBox startRow = new HBox(10, starting, randomWord);
+        //Oudom Pach OTP220001 11/12/2026 Revised: Starting word placement and label
+        Label startLabel = new Label("Starting Word");
+        startLabel.setMinWidth(Region.USE_PREF_SIZE);
+        HBox startRow = new HBox(10, startLabel, starting, randomWord);
+        startRow.setAlignment(Pos.CENTER_LEFT);
         HBox.setHgrow(starting, Priority.ALWAYS);
 
-        ComboBox<String> algorithm = new ComboBox<>(FXCollections.observableArrayList("Weighted Probabilistic", "Random / Alternative"));
+        ComboBox<String> algorithm = new ComboBox<>(FXCollections.observableArrayList("Weighted Probabilistic", "Temperature"));
         algorithm.getSelectionModel().selectFirst();
         algorithm.setMaxWidth(Double.MAX_VALUE);
 
-        Spinner<Integer> count = new Spinner<>(1, 25, 5);
-        count.setPrefWidth(100);
+        Spinner<Double> tempSpinner = new Spinner<>(0.1, 2.5, 1.0, 0.1);
+        tempSpinner.setEditable(true);
+        tempSpinner.setPrefWidth(75);
+        tempSpinner.setMinWidth(65);
+        tempSpinner.disableProperty().bind(algorithm.valueProperty().isEqualTo("Weighted Probabilistic"));
 
-        VBox algoBox = new VBox(7, new Label("Algorithm"), algorithm);
+        // Restrict input to non-negative decimal digits only
+        tempSpinner.getEditor().setTextFormatter(new TextFormatter<Double>(change ->
+            change.getControlNewText().matches("\\d*(\\.\\d*)?") ? change : null));
+
+        // Commit typed value when focus is lost, revert to 1.0 if empty/invalid
+        tempSpinner.focusedProperty().addListener((o, wasFocused, isNowFocused) -> {
+            if (!isNowFocused) {
+                try {
+                    tempSpinner.commitValue();
+                } catch (Exception ex) {
+                    tempSpinner.getValueFactory().setValue(1.0);
+                    tempSpinner.getEditor().setText("1.0");
+                }
+            }
+        });
+        VBox tempBox = new VBox(5, new Label("Temp"), tempSpinner);
+
+        Spinner<Integer> count = new Spinner<>(1, 25, 5);
+        //Oudom Pach OTP220001 11/12/2026 Revised batch count field to type in it.
+        count.setEditable(true);
+        count.setPrefWidth(75);
+        count.setMinWidth(65);
+
+        // Restrict input to digits only
+        count.getEditor().setTextFormatter(new TextFormatter<Integer>(change ->
+                change.getControlNewText().matches("\\d*") ? change : null));
+
+        // Commit typed value when focus is lost
+        count.focusedProperty().addListener((o, wasFocused, isNowFocused) -> {
+            if (!isNowFocused) {
+                try {
+                    count.commitValue();
+                } catch (Exception ex) {
+                    count.getValueFactory().setValue(5);
+                }
+            }
+        });
+
+        VBox algoBox = new VBox(5, new Label("Algorithm"), algorithm);
         HBox.setHgrow(algoBox, Priority.ALWAYS);
-        HBox controls = new HBox(15, algoBox, new VBox(7, new Label("Batch Count"), count));
+        VBox countBox = new VBox(5, new Label("Batch Count"), count);
 
         CheckBox selfIngest = new CheckBox("Self-Ingest generated sentences into DB");
         VBox batch = new VBox(9);
         List<CheckBox> selections = new ArrayList<>();
         List<String> generated = new ArrayList<>();
-
-        // If the database is connected and has words, generate an initial batch using real Markov probabilities
-        if (!state.getWords().isEmpty()) {
-            for (int i = 0; i < 5; i++) {
-                generated.add(state.generateMockSentence(starting.getText(), true));
-            }
-        }
 
         // Builds the sentence card rows in the scroll pane
         Runnable render = () -> {
@@ -234,23 +278,41 @@ public class EditorView {
                 Label body = new Label(sentence);
                 body.setWrapText(true);
                 body.setMaxWidth(Double.MAX_VALUE);
+                HBox.setHgrow(body, Priority.ALWAYS);
+
                 Button add = UIFactory.button("Add to Text", "", () -> appendToEditor(sentence));
-                VBox cardContent = new VBox(8, body, add);
-                HBox.setHgrow(cardContent, Priority.ALWAYS);
-                HBox card = new HBox(10, selected, cardContent);
+                add.setMinWidth(Region.USE_PREF_SIZE);
+
+                HBox card = new HBox(10, selected, body, add);
+                card.setAlignment(Pos.CENTER_LEFT);
                 card.getStyleClass().add("sentence-card");
                 batch.getChildren().add(card);
             }
         };
+        //Oudom Pach OTP220001 11/12/2026 Added:
+        // If the database is connected and has words, generate an initial batch using real Markov probabilities
+        if (!state.getWords().isEmpty()) {
+            for (int i = 0; i < 5; i++) {
+                generated.add(state.generateSentence(starting.getText(), false, 1.0f));
+            }
+        }
         render.run();
 
         // Oudom Pach OTP220001 11/3/2026 Revised: Connected sentence generation to Markov algorithm and self-ingestion
         // Logic for generating sentences using the active algorithm
         // Ayush Kafley axk220116 11/18/2026: updated self ingestion and saving to DB
         Button generate = UIFactory.button("Generate Sentences", "primary", () -> {
+            try {
+                count.commitValue();
+                tempSpinner.commitValue();
+            } catch (Exception ignored) {}
             generated.clear();
+
+            boolean useTemp = "Temperature".equals(algorithm.getValue());
+            float tempVal = tempSpinner.getValue().floatValue();
+
             for (int i = 0; i < count.getValue(); i++) {
-                String sentence = state.generateMockSentence(starting.getText(), algorithm.getValue().startsWith("Weighted"));
+                String sentence = state.generateSentence(starting.getText(), useTemp, tempVal);
                 generated.add(sentence);
                 state.getHistory().add(new LogItem(sentence, UIFactory.now(), algorithm.getValue()));
             }
@@ -269,20 +331,24 @@ public class EditorView {
                         return;
                     }
                     state.applyIngestedWords(result.words(), result.transitions());
-                    state.setStatus("Saved " + batchSentence.size() + batchSentence.size() + " generated sentences ");
+                    state.setStatus("Saved " + batchSentence.size() + " generated sentences ");
                 }, "Could not save generated sentances: ");
             } else if (ingest)
                 selfIngest(batchSentence); //pass to save offline in memory
             render.run();
         });
-        generate.setMaxWidth(Double.MAX_VALUE);
+        //Oudom Pach OTP220001 11/12/2026: Hbox to set alignment
+        generate.setMinWidth(Region.USE_PREF_SIZE);
+
+        HBox controls = new HBox(10, algoBox, tempBox, countBox, generate);
+        controls.setAlignment(Pos.BOTTOM_LEFT);
 
         ScrollPane list = new ScrollPane(batch);
         list.setFitToWidth(true);
         list.setPrefHeight(240);
         VBox.setVgrow(list, Priority.ALWAYS);
 
-        HBox actions = new HBox(8,
+        HBox actions = new HBox(10,
                 UIFactory.button("Add Selected to Body of Text", "", () -> {
                     for (int i = 0; i < generated.size(); i++) {
                         if (i < selections.size() && selections.get(i).isSelected()) {
@@ -290,10 +356,13 @@ public class EditorView {
                         }
                     }
                 }),
+                //Oudom Pach OTP220001 11/12/2026 fix alignment of button to make it spaced
+                UIFactory.spacer(),
                 UIFactory.button("Add All to Body of Text", "", () -> appendToEditor(String.join(" ", generated))));
+        actions.setAlignment(Pos.CENTER_LEFT);
 
         VBox right = UIFactory.panel("Sentence generator",
-                new Label("Starting Word"), startRow, controls, generate, selfIngest,
+                startRow, controls, selfIngest,
                 UIFactory.label("GENERATED BATCH", "eyebrow"), list, actions);
 
         SplitPane split = new SplitPane(left, right);

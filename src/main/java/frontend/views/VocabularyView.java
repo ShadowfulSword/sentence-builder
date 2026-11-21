@@ -15,10 +15,12 @@ import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
 import javafx.collections.transformation.FilteredList;
 import javafx.concurrent.Task;
+import javafx.event.ActionEvent;
 import javafx.scene.Node;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 
+import javax.print.ServiceUIFactory;
 import java.sql.SQLException;
 import java.util.Comparator;
 import java.util.List;
@@ -53,6 +55,8 @@ public class VocabularyView {
         // Search box to filter words by their starting letters
         TextField search = new TextField();
         search.setPromptText("Filter by word prefix...");
+        search.getStyleClass().add("composition");
+
         HBox.setHgrow(search, Priority.ALWAYS); // Let the search bar stretch horizontally
 
         // Number spinner to filter out words below a certain total count
@@ -85,17 +89,19 @@ public class VocabularyView {
         // Dropdown menu to let the user sort the vocabulary list by different metrics
         ComboBox<String> sort = new ComboBox<>(FXCollections.observableArrayList(
                 "Alphabetical (A–Z)", "Total Frequency", "Start Count", "End Count"));
-        sort.getSelectionModel().selectFirst();
+        sort.getSelectionModel().select("Total Frequency");
         // When a sort option is picked, sort the underlying words list using the matching Comparator
         sort.setOnAction(e -> {
             Comparator<WordItem> c = switch (sort.getSelectionModel().getSelectedIndex()) {
-                case 1 -> Comparator.comparingInt(WordItem::total).reversed();  // Highest total first
+                case 0 -> Comparator.comparing(WordItem::text);  // Alphabetical order
                 case 2 -> Comparator.comparingInt(WordItem::starts).reversed(); // Highest start count first
                 case 3 -> Comparator.comparingInt(WordItem::ends).reversed();   // Highest end count first
-                default -> Comparator.comparing(WordItem::text);                // A-Z alphabetical
+                default -> Comparator.comparingInt(WordItem::total).reversed(); // Highest Total count first
             };
             FXCollections.sort(words, c);
         });
+
+
 
         // Oudom Pach OTP220001 11/08/26 Revised: Reconciled vocabulary loader to fetch from MySQL via DbRunner when connected or fallback to in-memory state
         Runnable loadWords = () -> {
@@ -104,6 +110,8 @@ public class VocabularyView {
                 dbRunner.rundb(DatabaseManager::getAllWords, rows -> {
                     words.setAll(rows.stream().map(r -> new WordItem(r.word(), r.total(), r.start(), r.end(), r.follows())).toList());
                     state.setStatus("Loaded " + rows.size() + " words from the Database");
+                    //ensures order on load is same as default in dropdown
+                    sort.getOnAction().handle(new ActionEvent());
                 }, "Could not connect to Database: ");
             } else {
                 words.setAll(state.getWords());
@@ -113,16 +121,18 @@ public class VocabularyView {
         state.getWords().addListener((ListChangeListener<WordItem>) c -> loadWords.run()); //reload on imports
         // Assemble the left panel containing the filter bar, sort dropdown, and vocabulary table
         VBox left = UIFactory.panel("Vocabulary explorer",
-                new HBox(10, search, new Label("Min Frequency ≥"), minimum),
-                new HBox(10, new Label("Sort:"), sort),
+                new HBox(10, search, new Label("Min Frequency ≥"), minimum, new Label("Sort:"), sort),
                 table);
         VBox.setVgrow(table, Priority.ALWAYS); // Let the table expand vertically to fill space
 
         // Right-side inspector controls for viewing and editing the currently selected word
         Label selected = UIFactory.label("Select a word", "title");
         TextField total = new TextField();
+        HBox.setHgrow(total, Priority.ALWAYS);
         TextField starts = new TextField();
+        HBox.setHgrow(starts, Priority.ALWAYS );
         TextField ends = new TextField();
+        HBox.setHgrow(ends, Priority.ALWAYS );
 
         // Secondary table showing which words follow the selected word and their probabilities
         TableView<TransitionItem> pairs = new TableView<>();
@@ -228,13 +238,15 @@ public class VocabularyView {
         });
 
         // Assemble the right panel containing the word details editor and follow-word table
+        Label startLabel = new Label("Start Count:");
+        Label endLabel = new Label("End Count:");
+        Label totalLabel = new Label("Total Count:");
+
         VBox right = UIFactory.panel("Word details · local editor",
-                selected,
-                new Label("Total Count"), total,
-                new Label("Start Count"), starts,
-                new Label("End Count"), ends,
+                selected, new HBox(10,new VBox(10,  totalLabel, UIFactory.spacer(), startLabel, UIFactory.spacer(), endLabel, UIFactory.spacer()),
+                        new VBox(10, total, starts, ends)),
                 new Label("Follow-word transitions"), pairs,
-                save, delete);
+                new HBox( 10, save, UIFactory.spacer(),  delete));
 
         // Place the left explorer (65% width) and right editor (35% width) side-by-side
         SplitPane split = new SplitPane(left, right);
