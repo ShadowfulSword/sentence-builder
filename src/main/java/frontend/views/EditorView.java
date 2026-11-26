@@ -5,6 +5,9 @@
 package frontend.views;
 
 import backend.Database.DatabaseManager;
+import backend.Ingestion.CorpusRepository;
+import backend.Ingestion.GutenbergIngestor;
+import backend.Ingestion.TextSanitizer;
 import backend.Database.TransitionData;
 import frontend.DbRunner;
 import frontend.UIFactory;
@@ -12,12 +15,14 @@ import frontend.state.AppState;
 import frontend.state.AppState.LogItem;
 import javafx.collections.FXCollections;
 import javafx.geometry.Pos;
+import javafx.collections.ListChangeListener;
 import javafx.geometry.Side;
 import javafx.scene.Node;
 import javafx.scene.control.*;
 import javafx.scene.input.KeyCode;
 import javafx.scene.layout.*;
 
+import java.sql.SQLException;
 import java.util.*;
 
 /* Tab 1:
@@ -51,6 +56,7 @@ public class EditorView {
 
 
         // The editor.text listener watches every character and predicts the next word when space is typed
+        //Ayush kafley axk220167 11/12/2026 updated so the lastword uses TextSanitizer's sanitize
         ContextMenu suggestions = new ContextMenu();
         editor.textProperty().addListener((o, old, value) -> {
             suggestions.hide();
@@ -62,9 +68,7 @@ public class EditorView {
 
                 if (!textBeforeCaret.isEmpty()) {
                     int lastSpace = textBeforeCaret.lastIndexOf(' ');
-                    String lastWord = (lastSpace == -1 ? textBeforeCaret : textBeforeCaret.substring(lastSpace + 1))
-                            .toLowerCase()
-                            .replaceAll("[^\\p{L}\\p{N}']", "");
+                    String lastWord = TextSanitizer.sanitize(lastSpace == -1 ? textBeforeCaret : textBeforeCaret.substring(lastSpace + 1));
 
                     ArrayList<TransitionData> nextWords = state.getTransitions("Temperature".equals(algorithm.getValue()), lastWord);
                     if (nextWords != null && !nextWords.isEmpty()) {
@@ -109,6 +113,52 @@ public class EditorView {
                 editor.insertText(editor.getCaretPosition(), topWordForTab[0]);
             } else if (e.getCode() == KeyCode.ESCAPE) {
                 suggestions.hide();
+            }
+        });
+
+        //written by Ayush Kafley (axk220167)
+        //ingest a full sentence once the user finishes it with (./!/?)
+        final int[] ingestedUpTo = {0};
+        editor.textProperty().addListener((o, oldV, newV) ->{
+            if(newV == null){
+                ingestedUpTo[0] = 0;
+                return;
+            }
+
+            //text changed via add to text or clear
+            if(!editor.isFocused()){
+                ingestedUpTo[0] = newV.length();
+                return;
+            }
+
+            //text was delteted
+            if(newV.length() < ingestedUpTo[0])
+                ingestedUpTo[0] = newV.length();
+
+            //single char typed
+            if(oldV == null || newV.length() != oldV.length() + 1)
+                return;
+
+            //where was the char inserted
+            int i = 0;
+            while((i < oldV.length()) && (oldV.charAt(i) == newV.charAt(i)))
+                i++;
+
+            //added char was inside already ingested sentence -> change the marker
+            if(i < ingestedUpTo[0]){
+                ingestedUpTo[0] ++;
+                return;
+            }
+
+            char c = newV.charAt(i);
+            if(c == '.' || c == '!' || c == '?'){
+                //check if . means abbriviations and not end of sentence
+                if(c == '.' && endsWithAbb(newV, i))
+                    return;
+                String sentence = newV.substring(ingestedUpTo[0], i + 1); //mark new sentane -> since last ingested
+                ingestedUpTo[0] = i + 1;
+                if(!sentence.isBlank())
+                    selfIngest(List.of(sentence));
             }
         });
 
@@ -258,6 +308,7 @@ public class EditorView {
 
         // Oudom Pach OTP220001 11/3/2026 Revised: Connected sentence generation to Markov algorithm and self-ingestion
         // Logic for generating sentences using the active algorithm
+        // Ayush Kafley axk220116 11/18/2026: updated self ingestion and saving to DB
         Button generate = UIFactory.button("Generate Sentences", "primary", () -> {
             try {
                 count.commitValue();
@@ -272,8 +323,26 @@ public class EditorView {
                 String sentence = state.generateSentence(starting.getText(), useTemp, tempVal);
                 generated.add(sentence);
                 state.getHistory().add(new LogItem(sentence, UIFactory.now(), algorithm.getValue()));
-                if (selfIngest.isSelected()) state.selfIngestSentence(sentence);
             }
+            //save to the DB
+            List<String> batchSentence = new ArrayList<>(generated);
+            String algo = algorithm.getValue();
+            boolean ingest = selfIngest.isSelected();
+            if(state.isDatabaseConnected()){
+                dbRunner.rundb(db -> {
+                    db.addGeneratedSentences(batchSentence, algo, ingest);
+                    return ingest ? CorpusRepository.ingestSentences(db, batchSentence) : null;
+                }, result -> {
+                    state.notifiDataChanged(); //signal that the generated sentances have been added to the DB for report
+                    if(result == null || result.totalWords() == 0){
+                        state.setStatus("Saved " + batchSentence.size() + " generated Sentances");
+                        return;
+                    }
+                    state.applyIngestedWords(result.words(), result.transitions());
+                    state.setStatus("Saved " + batchSentence.size() + " generated sentences ");
+                }, "Could not save generated sentances: ");
+            } else if (ingest)
+                selfIngest(batchSentence); //pass to save offline in memory
             render.run();
         });
         //Oudom Pach OTP220001 11/12/2026: Hbox to set alignment
@@ -316,5 +385,35 @@ public class EditorView {
     private void appendToEditor(String sentence) {
         editor.appendText((editor.getText().endsWith(" ") || editor.getText().isEmpty() ? "" : " ") + sentence + " ");
         state.setStatus("Added to composition");
+    }
+
+    //helper method to hand the generated sentances to the runner then update memory on successful saves
+    private void selfIngest(List<String> sentances) {
+        if(state.isDatabaseConnected()){
+            dbRunner.rundb(db -> CorpusRepository.ingestSentences(db, sentances), result -> {
+                if(result.totalWords() == 0)
+                    return;
+                state.applyIngestedWords(result.words(), result.transitions());
+                state.setStatus("Self-ingested " + result.totalWords() + " words into the Database");
+            }, "Could not self-ingest: ");
+        } else {
+            //if no DB then keep it in memory only
+            try {
+                CorpusRepository.SentanceResult result = CorpusRepository.ingestSentences(null, sentances);
+                state.applyIngestedWords(result.words(), result.transitions());
+                state.setStatus(("Self-ingested " + result.totalWords() + " words into the Database"));
+            } catch (SQLException e){
+                state.setStatus("Could not self-ingest: " + e.getMessage());
+            }
+        }
+    }
+
+    //helper method to check if the period belongs to a abbrivation
+    private static boolean endsWithAbb(String text, int index){
+        int start = index;
+        while(start > 0 && !Character.isWhitespace(text.charAt(start - 1)))
+            start --;
+        String word = text.substring(start, index).toLowerCase(Locale.ROOT);
+        return GutenbergIngestor.ABBREVIATIONS.contains(word);
     }
 }

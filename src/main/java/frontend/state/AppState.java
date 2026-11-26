@@ -6,9 +6,12 @@ package frontend.state;
 import backend.Database.DatabaseManager;
 import backend.Database.TransitionData;
 import backend.Database.WordData;
+import backend.Ingestion.TextSanitizer;
 import backend.ProbabilisticGenerator;
 import backend.TemperatureGenerator;
 import frontend.UIFactory;
+import javafx.beans.property.IntegerProperty;
+import javafx.beans.property.SimpleIntegerProperty;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
 import javafx.collections.FXCollections;
@@ -143,8 +146,20 @@ public class AppState {
     }
 
     // Merges newly ingested corpus data into in-memory collections and adds file to history
+    //Ayush Kafley axk220167 11/18/2026: Split to a helper function to ingestwords then add files to the list seperately
+    //for the use of selfIngest in EditorView which does not provide titles
     public void applyIngestedCorpus(String bookTitle, int totalWords, long sizeBytes,
                                     Collection<WordData> newWords, Collection<TransitionData> newTransitions) {
+
+        //call helper to ingest the words + transitions
+        applyIngestedWords(newWords, newTransitions);
+        // Add to imported files list
+        corpora.add(0, new CorpusItem(bookTitle, String.format("%,d words", totalWords), UIFactory.now()));
+    }
+
+    //Ayush Kafley axk220167: Helper function to merge words + transdition into in-memory collection; file ingestion handled in applyIngestedCorpus
+    //code copied/extracted straight from applyINgestedCorpus
+    public void applyIngestedWords(Collection<WordData> newWords, Collection<TransitionData> newTransitions){
         // Merge transitions
         for (TransitionData t : newTransitions) {
             transitions.computeIfAbsent(t.getWord(), k -> new HashMap<>())
@@ -169,15 +184,13 @@ public class AppState {
             updatedList.add(new WordItem(w, c[0], c[1], c[2], follows));
         });
         words.setAll(updatedList);
-
-        // Add to imported files list
-        corpora.add(0, new CorpusItem(bookTitle, String.format("%,d words", totalWords), UIFactory.now()));
     }
 
     // Oudom Pach OTP220001 11/3/2026 Revised: Added self-ingestion to persist generated sentences to MySQL and UI state
     // Self-ingests a generated sentence into both the database (if connected) and in-memory collections
+    // Ayush Kafley axk220167 11/12/2026: revised to use TextSanitizer for consistency
     public void selfIngestSentence(String sentence) {
-        String clean = sentence.toLowerCase().replaceAll("[^\\p{L}\\p{N}' ]", " ").trim();
+        String clean = TextSanitizer.sanitize(sentence);
         if (clean.isEmpty()) return;
         String[] tokens = clean.split("\\s+");
         if (tokens.length == 0) return;
@@ -371,4 +384,9 @@ public class AppState {
         counts.forEach((w, c) -> updated.add(new WordItem(w, c[0], c[1], c[2], transitions.getOrDefault(w, Map.of()).size())));
         words.setAll(updated);
     }
+
+    //using intgegerProtperty lets us auto update on changes
+    private final IntegerProperty dataVersion = new SimpleIntegerProperty(0);
+    public IntegerProperty dataVersionProperty() {return dataVersion;} //check for what version we're at (cross checking)
+    public void notifiDataChanged() {dataVersion.set(dataVersion.get() + 1);} //signal an upadte
 }
