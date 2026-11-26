@@ -38,7 +38,7 @@ public class TemperatureGenerator extends ProbabilisticGenerator{
     }
 
     @Override
-    protected ArrayList<TransitionData> getTransitions(WordData currentWord) {
+    public ArrayList<TransitionData> getTransitions(WordData currentWord) {
         ArrayList<TransitionData> transitions =  db.getTransitions(currentWord.getWord());
         if (transitions == null || transitions.isEmpty()) {
             return transitions;
@@ -53,14 +53,42 @@ public class TemperatureGenerator extends ProbabilisticGenerator{
             return greedy;
         }
 
-        float invertedTemperature = 1f/max(temperature, 1e-5f);
-        int baseTotal = max(1, currentWord.getTotalFrequency());
+        float invertedTemperature = 1f/ max(temperature, 1e-5f);
+        int baseTotal = 0;
 
+        for(TransitionData transition : transitions)
+            baseTotal += transition.getFrequency();
+
+        baseTotal = max(1, baseTotal);
+
+        ArrayList<Double> tempSpot = new ArrayList<Double>();
+        double minValue = Double.MAX_VALUE;
+        System.out.println(transitions.getFirst().getNextWord() + " " + transitions.getFirst().getFrequency() + " " + baseTotal + " " + invertedTemperature);
         for(TransitionData transition : transitions) {
-            double scaled = pow((double)transition.getFrequency() / baseTotal, invertedTemperature) * 10000.0;
-            int newFrequency = max(1, (int)Math.round(scaled));
-            transition.setFrequency(newFrequency);
+            double scaled = pow(((double)transition.getFrequency()) / baseTotal, invertedTemperature);
+            if(scaled > 1f/Integer.MAX_VALUE)
+                minValue = Math.min(minValue, scaled);
+
+            //int newFrequency =  (int)Math.round(scaled);
+            tempSpot.add(scaled);
         }
+
+        if(minValue == Double.MAX_VALUE)
+        {
+            ArrayList<TransitionData> greedy = new ArrayList<>();
+            TransitionData first = transitions.get(0);
+            first.setFrequency(max(1, currentWord.getTotalFrequency()));
+            greedy.add(first);
+            return greedy;
+        }
+        minValue = 1/minValue;
+        for(int i = 0; i < transitions.size(); i++) {
+            transitions.get(i).setFrequency((int)(tempSpot.get(i) * minValue));
+        }
+
+        transitions.sort(Comparator.comparing(TransitionData::getFrequency, Comparator.reverseOrder()));
+
+        //System.out.println(transitions.getFirst().getNextWord() + " " + transitions.getFirst().getFrequency());
 
         return transitions;
     }

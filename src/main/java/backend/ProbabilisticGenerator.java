@@ -89,7 +89,7 @@ public class ProbabilisticGenerator {
         return nextWord;
     }
 
-    protected ArrayList<TransitionData> getTransitions(WordData currentWord)
+    public ArrayList<TransitionData> getTransitions(WordData currentWord)
     {
         return db.getTransitions(currentWord.getWord());
     }
